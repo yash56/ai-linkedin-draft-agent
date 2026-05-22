@@ -67,6 +67,7 @@ class Draft:
     ending: str
     source_links: list[str]
     fact_check_notes: list[str]
+    risk_flags: list[str] = dataclasses.field(default_factory=list)
 
 
 class AgentError(Exception):
@@ -167,6 +168,165 @@ def clean_text(value: str, max_length: int = 320) -> str:
     if len(text) > max_length:
         return text[: max_length - 1].rstrip() + "..."
     return text
+
+
+def split_claims(text: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if not normalized:
+        return []
+    parts = re.split(r"(?<=[.!?])\s+|\n+", normalized)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def source_pack_text(item: NewsItem) -> str:
+    return " ".join(
+        [
+            item.title,
+            item.source_name,
+            item.published_at.strftime("%Y-%m-%d %H:%M UTC"),
+            item.category,
+            item.credibility,
+            item.url,
+            item.summary,
+        ]
+    ).lower()
+
+
+def meaningful_tokens(text: str) -> set[str]:
+    stopwords = {
+        "about",
+        "after",
+        "again",
+        "also",
+        "another",
+        "because",
+        "before",
+        "being",
+        "between",
+        "could",
+        "does",
+        "from",
+        "have",
+        "into",
+        "itself",
+        "just",
+        "like",
+        "more",
+        "most",
+        "only",
+        "over",
+        "should",
+        "that",
+        "their",
+        "there",
+        "these",
+        "this",
+        "those",
+        "through",
+        "what",
+        "when",
+        "where",
+        "which",
+        "while",
+        "with",
+        "would",
+        "your",
+    }
+    tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9']{2,}", text.lower()))
+    return {token for token in tokens if token not in stopwords}
+
+
+def is_factual_claim(claim: str) -> bool:
+    lowered = claim.lower()
+    claim_patterns = [
+        r"\b(is|are|was|were|will|has|have|had|announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes)\b",
+        r"\b\d+[\w%$]*\b",
+        r"\b(according to|source summary|published this|rss item)\b",
+    ]
+    return any(re.search(pattern, lowered) for pattern in claim_patterns)
+
+
+def claim_supported_by_source(claim: str, item: NewsItem) -> bool:
+    if not is_factual_claim(claim):
+        return True
+
+    source_text = source_pack_text(item)
+    tokens = meaningful_tokens(claim)
+    if not tokens:
+        return True
+
+    supported_tokens = {token for token in tokens if token in source_text}
+    support_ratio = len(supported_tokens) / len(tokens)
+
+    # Conservative threshold: keep source-metadata claims and broad analysis, flag specifics not in source pack.
+    if support_ratio >= 0.55:
+        return True
+
+    return False
+
+
+def fact_check_text(text: str, item: NewsItem, section: str) -> tuple[str, list[str]]:
+    chunks = text.split("\n")
+    checked_chunks: list[str] = []
+    risk_flags: list[str] = []
+
+    for chunk in chunks:
+        claims = split_claims(chunk)
+        if not claims:
+            checked_chunks.append(chunk)
+            continue
+
+        supported_claims = []
+        for claim in claims:
+            if claim_supported_by_source(claim, item):
+                supported_claims.append(claim)
+            else:
+                risk_flags.append(f"{section}: removed weak claim: {claim}")
+
+        if supported_claims:
+            checked_chunks.append(" ".join(supported_claims))
+
+    cleaned_text = "\n".join(checked_chunks).strip()
+    return cleaned_text, risk_flags
+
+
+def fact_check_draft(draft: Draft) -> Draft:
+    hook, hook_flags = fact_check_text(draft.hook, draft.topic, "Hook")
+    body, body_flags = fact_check_text(draft.body, draft.topic, "Body")
+    ending, ending_flags = fact_check_text(draft.ending, draft.topic, "Ending")
+    flags = hook_flags + body_flags + ending_flags
+
+    if not hook:
+        hook = f"PM read: {draft.topic.title}"
+        flags.append("Hook: replaced with source title after unsupported claims were removed.")
+
+    if not body:
+        body = (
+            f"{draft.topic.source_name} published this on "
+            f"{draft.topic.published_at.strftime('%Y-%m-%d %H:%M UTC')}.\n\n"
+            "The generated draft had weak factual claims, so the body was reduced to verified source metadata."
+        )
+        flags.append("Body: replaced with verified source metadata after unsupported claims were removed.")
+
+    if not ending:
+        ending = "PM takeaway: verify the linked source before adding any stronger claim."
+        flags.append("Ending: replaced with a conservative PM takeaway.")
+
+    fact_notes = list(draft.fact_check_notes)
+    if flags:
+        fact_notes.append("Automated claim audit removed or rewrote weak claims before Slack delivery.")
+    else:
+        fact_notes.append("Automated claim audit found no weak factual claims against the source pack.")
+
+    return Draft(
+        topic=draft.topic,
+        hook=sanitize_generated_text(hook),
+        body=sanitize_generated_text(body),
+        ending=sanitize_generated_text(ending),
+        source_links=draft.source_links,
+        fact_check_notes=dedupe_text(fact_notes),
+        risk_flags=dedupe_text(flags),
+    )
 
 
 def normalize_url(url: str) -> str:
@@ -580,6 +740,8 @@ def sanitize_generated_text(value: str) -> str:
 def format_draft(draft: Draft, index: int) -> str:
     source_links = "\n".join(f"- {link}" for link in draft.source_links)
     fact_notes = "\n".join(f"- {note}" for note in draft.fact_check_notes)
+    risk_flags = "\n".join(f"- {flag}" for flag in draft.risk_flags)
+    risk_section = f"\n\n*Risk flags*\n{risk_flags}" if risk_flags else ""
     return (
         f"*Draft {index}: {draft.topic.title}*\n\n"
         f"*Hook*\n{draft.hook}\n\n"
@@ -587,6 +749,7 @@ def format_draft(draft: Draft, index: int) -> str:
         f"*Suggested ending*\n{draft.ending}\n\n"
         f"*Source links*\n{source_links}\n\n"
         f"*Fact-check notes*\n{fact_notes}"
+        f"{risk_section}"
     )
 
 
@@ -605,6 +768,10 @@ def build_slack_message(drafts: list[Draft], now: dt.datetime) -> str:
             f"Generated {len(drafts)} source-backed LinkedIn draft(s)."
         ),
     ]
+    total_risk_flags = sum(len(draft.risk_flags) for draft in drafts)
+    if total_risk_flags:
+        parts[0] = f"{parts[0]}\n\nRisk flags found: {total_risk_flags}"
+
     parts.extend(format_draft(draft, index) for index, draft in enumerate(drafts, start=1))
     return "\n\n---\n\n".join(parts)
 
@@ -650,7 +817,10 @@ def run() -> int:
     else:
         LOGGER.info("GEMINI_API_KEY is not set. Using deterministic template writer.")
 
-    drafts = [write_draft(item, style, gemini_api_key, gemini_model) for item in selected]
+    drafts = [
+        fact_check_draft(write_draft(item, style, gemini_api_key, gemini_model))
+        for item in selected
+    ]
     message = build_slack_message(drafts, now)
 
     if args.dry_run:
