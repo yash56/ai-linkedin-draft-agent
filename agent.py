@@ -238,8 +238,26 @@ def meaningful_tokens(text: str) -> set[str]:
 
 def is_factual_claim(claim: str) -> bool:
     lowered = claim.lower()
+    opinion_markers = [
+        "i think",
+        "i would",
+        "my read",
+        "my opinion",
+        "pm read",
+        "pm takeaway",
+        "question",
+        "the useful question",
+        "the pm job",
+        "the signal",
+        "the opportunity",
+        "this matters",
+        "worth watching",
+    ]
+    if any(marker in lowered for marker in opinion_markers):
+        return False
+
     claim_patterns = [
-        r"\b(is|are|was|were|will|has|have|had|announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes)\b",
+        r"\b(announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes|confirmed|cited|runs on|powered by)\b",
         r"\b\d+[\w%$]*\b",
         r"\b(according to|source summary|published this|rss item)\b",
     ]
@@ -258,8 +276,8 @@ def claim_supported_by_source(claim: str, item: NewsItem) -> bool:
     supported_tokens = {token for token in tokens if token in source_text}
     support_ratio = len(supported_tokens) / len(tokens)
 
-    # Conservative threshold: keep source-metadata claims and broad analysis, flag specifics not in source pack.
-    if support_ratio >= 0.55:
+    # Conservative, but not style-killing: factual specifics need source support.
+    if support_ratio >= 0.45:
         return True
 
     return False
@@ -315,6 +333,11 @@ def fact_check_draft(draft: Draft) -> Draft:
     fact_notes = list(draft.fact_check_notes)
     if flags:
         fact_notes.append("Automated claim audit removed or rewrote weak claims before Slack delivery.")
+        LOGGER.warning(
+            "Claim audit adjusted %s claim(s) for source: %s",
+            len(flags),
+            draft.topic.url,
+        )
     else:
         fact_notes.append("Automated claim audit found no weak factual claims against the source pack.")
 
@@ -510,6 +533,9 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
             f"{summary_sentence}\n\n"
             "The PM read is simple: look past the announcement and inspect the user workflow.\n\n"
             "What changes for the user? What gets easier? What still needs proof?\n\n"
+            "The interesting part is not whether the headline sounds important. Most AI headlines do.\n\n"
+            "The interesting part is whether a user, team, or buyer has a clearer reason to change behavior after reading it.\n\n"
+            "That is the difference between product momentum and another well-lit announcement.\n\n"
             "A product story is only useful if the value is specific enough to survive outside the launch post."
         ),
         "Launch analysis": (
@@ -519,12 +545,18 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
             "1. Is the user problem clear?\n"
             "2. Is the adoption path obvious?\n"
             "3. Is the product claim supported by the source, not vibes?\n\n"
+            "That last point matters more in AI than almost anywhere else.\n\n"
+            "The category is already crowded with impressive demos, fuzzy positioning, and features that look useful until they hit a real workflow.\n\n"
+            "A strong launch should make the buyer's next step obvious.\n\n"
             "Launches are cheap. Changed behavior is expensive."
         ),
         "Founder/investor signal": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
             "The signal for founders and investors is not the headline itself. It is where attention, distribution, trust, or workflow gravity might shift.\n\n"
+            "In AI, that signal is easy to overread.\n\n"
+            "The safer read is to ask what this changes about the market map. Does it create a new wedge? Does it make an existing product surface more valuable? Does it expose a workflow that still needs better tooling?\n\n"
+            "Those questions are more useful than treating every announcement like a category reset.\n\n"
             "If this creates a new default behavior, it matters. If it only creates a louder demo, the market will move on by lunch."
         ),
         "PM lesson": (
@@ -532,12 +564,18 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
             f"{summary_sentence}\n\n"
             "PM lesson: do not confuse capability with product value.\n\n"
             "The useful question is not \"is this impressive?\" It is \"does this remove friction from a real decision, workflow, or habit?\"\n\n"
+            "AI teams get into trouble when they ship capability and assume the use case will politely assemble itself.\n\n"
+            "It rarely does.\n\n"
+            "Users need context, trust, control, and a reason to come back tomorrow. Without that, even strong technology becomes another tab in the browser archaeology layer.\n\n"
             "That is where AI products either become useful or become another tab nobody asked for."
         ),
         "Slightly sarcastic industry observation": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
             "The AI industry remains undefeated at making every announcement sound like the beginning of a new era.\n\n"
+            "Sometimes it is. Often it is a feature, a positioning move, or a useful but narrow step forward wearing a keynote outfit.\n\n"
+            "That does not make it unimportant. It just means the PM read needs to be less breathless and more specific.\n\n"
+            "What is actually changing? Who feels the change first? What workflow gets less painful?\n\n"
             "The PM job is less dramatic: check the source, identify the user impact, and separate actual product movement from well-lit theater."
         ),
         "What this means for builders breakdown": (
@@ -547,6 +585,9 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
             "1. Watch the workflow, not just the feature.\n"
             "2. Look for a repeated user behavior this could unlock.\n"
             "3. Do not add claims unless the source supports them.\n\n"
+            "The useful builder question is not \"can we clone this?\"\n\n"
+            "It is \"what user pain does this make more visible?\"\n\n"
+            "That is where the better product opportunity usually sits. Not in copying the announcement, but in noticing the friction it points toward.\n\n"
             "The opportunity is usually hiding in the boring operational detail."
         ),
     }
@@ -663,6 +704,11 @@ Hard rules:
 - Avoid corporate fluff.
 - Avoid generic AI hype.
 - Voice: sharp Product Manager who tracks AI deeply.
+- Length: aim for 220 to 380 words total across hook, body, and ending.
+- Write like a ready-to-post LinkedIn draft, not an audit report.
+- Do not include labels like Hook, Body, Suggested ending, Sources, Fact-check notes, or Risk flags in the draft text.
+- Do not mention fact-checking inside the LinkedIn post.
+- You may use punchy section lines inside the post only when they improve readability.
 - Required style for this draft: {style}
 - The style must be one of: Product teardown, Launch analysis, Founder/investor signal, PM lesson, Slightly sarcastic industry observation, What this means for builders breakdown.
 - End with a strong opinion, question, or PM takeaway.
@@ -679,10 +725,10 @@ URL: {item.url}
 RSS summary: {summary}
 
 Write:
-1. hook: 1 to 2 sentences.
-2. body: 3 to 6 short paragraphs or a concise numbered list.
-3. ending: 1 question or closing line.
-4. fact_check_notes: what was used and what must be verified before posting.
+1. hook: 1 to 2 sharp opening lines.
+2. body: 6 to 10 short paragraphs, or a concise numbered/list-style breakdown, with PM analysis grounded only in the source metadata.
+3. ending: 1 strong opinion, question, or PM takeaway.
+4. fact_check_notes: internal notes only. These are not shown in Slack.
 """.strip()
 
 
@@ -739,18 +785,11 @@ def sanitize_generated_text(value: str) -> str:
 
 def format_draft(draft: Draft, index: int) -> str:
     source_links = "\n".join(f"- {link}" for link in draft.source_links)
-    fact_notes = "\n".join(f"- {note}" for note in draft.fact_check_notes)
-    risk_flags = "\n".join(f"- {flag}" for flag in draft.risk_flags)
-    risk_section = f"\n\nRisk flags:\n{risk_flags}" if risk_flags else ""
+    post = "\n\n".join(part.strip() for part in [draft.hook, draft.body, draft.ending] if part.strip())
     return (
         f"Draft {index}:\n"
-        f"Title: {draft.topic.title}\n\n"
-        f"Hook:\n{draft.hook}\n\n"
-        f"LinkedIn post body:\n{draft.body}\n\n"
-        f"Suggested ending:\n{draft.ending}\n\n"
+        f"{post}\n\n"
         f"Sources:\n{source_links}\n\n"
-        f"Fact-check notes:\n{fact_notes}"
-        f"{risk_section}"
     )
 
 
@@ -760,23 +799,18 @@ def build_slack_message(drafts: list[Draft], now: dt.datetime) -> str:
         return (
             f"Daily AI + PM LinkedIn Drafts\n"
             f"Date: {date_text}\n\n"
-            "No qualifying source-backed AI/Product news items were found in the freshness window. "
-            "No drafts were generated because making things up is not a content strategy."
+            "No qualifying source-backed AI/Product news items were found in the freshness window."
         )
 
     parts = [
         (
             f"Daily AI + PM LinkedIn Drafts\n"
-            f"Date: {date_text}\n\n"
-            f"Generated {len(drafts)} source-backed LinkedIn draft(s)."
+            f"Date: {date_text}"
         ),
     ]
-    total_risk_flags = sum(len(draft.risk_flags) for draft in drafts)
-    if total_risk_flags:
-        parts[0] = f"{parts[0]}\n\nRisk flags found: {total_risk_flags}"
 
     parts.extend(format_draft(draft, index) for index, draft in enumerate(drafts, start=1))
-    return "\n\n---\n\n".join(parts)
+    return "\n\n".join(parts)
 
 
 def send_to_slack(message: str, webhook_url: str) -> None:
