@@ -306,11 +306,12 @@ def rank_items(items: list[NewsItem], now: dt.datetime, config: AgentConfig, lim
 
 def style_for_day(now: dt.datetime) -> str:
     styles = [
-        "sharp_observation",
-        "pm_lens",
-        "casual_skeptic",
-        "builder_note",
-        "strategy_snapshot",
+        "Product teardown",
+        "Launch analysis",
+        "Founder/investor signal",
+        "PM lesson",
+        "Slightly sarcastic industry observation",
+        "What this means for builders breakdown",
     ]
     random.seed(now.strftime("%Y-%m-%d"))
     return random.choice(styles)
@@ -335,51 +336,68 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
     )
 
     hooks = {
-        "sharp_observation": f"The interesting part of this AI/Product update is not the headline. It is what teams will do next: {item.title}",
-        "pm_lens": f"PM lens on today's news: {item.title}",
-        "casual_skeptic": f"Another AI headline, yes. But this one is worth a calmer second look: {item.title}",
-        "builder_note": f"Builder note: {item.title}",
-        "strategy_snapshot": f"Strategy snapshot: {item.title}",
+        "Product teardown": f"Product teardown: {item.title}",
+        "Launch analysis": f"Launch analysis: {item.title}",
+        "Founder/investor signal": f"Founder/investor signal: {item.title}",
+        "PM lesson": f"PM lesson from today's AI news: {item.title}",
+        "Slightly sarcastic industry observation": f"Another AI headline, yes. This one is worth a sharper PM read: {item.title}",
+        "What this means for builders breakdown": f"What this means for builders: {item.title}",
     }
 
     body_templates = {
-        "sharp_observation": (
+        "Product teardown": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "What I would watch from here:\n"
-            "1. Whether this changes an actual user workflow.\n"
-            "2. Whether the product story is clear without extra hype.\n"
-            "3. Whether teams can explain the value in one sentence without needing a fog machine."
+            "The PM read is simple: look past the announcement and inspect the user workflow.\n\n"
+            "What changes for the user? What gets easier? What still needs proof?\n\n"
+            "A product story is only useful if the value is specific enough to survive outside the launch post."
         ),
-        "pm_lens": (
+        "Launch analysis": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "A simple product question to ask: who gets a noticeably easier day because of this?\n\n"
-            "If the answer is specific, there may be a real product signal here. If the answer is everyone, everywhere, instantly, bring snacks because we are entering hype theater."
+            "My launch-analysis lens:\n"
+            "1. Is the user problem clear?\n"
+            "2. Is the adoption path obvious?\n"
+            "3. Is the product claim supported by the source, not vibes?\n\n"
+            "Launches are cheap. Changed behavior is expensive."
         ),
-        "casual_skeptic": (
+        "Founder/investor signal": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "I like this as a reminder that AI news is most useful when we separate the announcement from the adoption path. Headlines are loud. Workflows are where the truth gets annoyingly specific."
+            "The signal for founders and investors is not the headline itself. It is where attention, distribution, trust, or workflow gravity might shift.\n\n"
+            "If this creates a new default behavior, it matters. If it only creates a louder demo, the market will move on by lunch."
         ),
-        "builder_note": (
+        "PM lesson": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "For builders and PMs, the practical read is to look for the smallest repeatable behavior this could unlock. New capability is nice. New habit is the prize."
+            "PM lesson: do not confuse capability with product value.\n\n"
+            "The useful question is not \"is this impressive?\" It is \"does this remove friction from a real decision, workflow, or habit?\"\n\n"
+            "That is where AI products either become useful or become another tab nobody asked for."
         ),
-        "strategy_snapshot": (
+        "Slightly sarcastic industry observation": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "The strategic question is not whether this sounds impressive. It is whether it changes distribution, trust, cost, or speed for the people using the product."
+            "The AI industry remains undefeated at making every announcement sound like the beginning of a new era.\n\n"
+            "The PM job is less dramatic: check the source, identify the user impact, and separate actual product movement from well-lit theater."
+        ),
+        "What this means for builders breakdown": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "What this means for builders:\n"
+            "1. Watch the workflow, not just the feature.\n"
+            "2. Look for a repeated user behavior this could unlock.\n"
+            "3. Do not add claims unless the source supports them.\n\n"
+            "The opportunity is usually hiding in the boring operational detail."
         ),
     }
 
     endings = {
-        "sharp_observation": "Curious what others see here: real workflow shift, or just another shiny tab in the browser?",
-        "pm_lens": "What would you test first if this landed on your roadmap?",
-        "casual_skeptic": "My bar: show me the changed user behavior, then I will clap loudly and responsibly.",
-        "builder_note": "Worth tracking, especially if it turns into a user habit rather than a launch-day screenshot.",
-        "strategy_snapshot": "The signal to watch is whether customers explain the value in plain language without borrowing the press release.",
+        "Product teardown": "Strong PM takeaway: if the workflow does not change, the launch is mostly noise.",
+        "Launch analysis": "Question I would ask the team: what user behavior should be measurably different after this?",
+        "Founder/investor signal": "My opinion: the durable signal is changed distribution or habit, not a prettier announcement.",
+        "PM lesson": "PM takeaway: capability is table stakes. Adoption is the real product work.",
+        "Slightly sarcastic industry observation": "Strong opinion: the AI market needs fewer victory laps and more proof of changed workflows.",
+        "What this means for builders breakdown": "Builder takeaway: ship toward a behavior, not a buzzword.",
     }
 
     fact_notes = [
@@ -466,16 +484,28 @@ def build_gemini_prompt(item: NewsItem, style: str) -> str:
     published_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
     summary = item.summary or "No usable RSS summary was provided."
     return f"""
-You are writing one LinkedIn draft for a professional audience.
+You are writing one LinkedIn draft like a sharp Product Manager who tracks AI deeply.
 
 Hard rules:
 - Use only the source metadata below.
-- Do not add facts, numbers, dates, benchmarks, funding amounts, product claims, quotes, or timelines.
+- Every factual claim must be traceable to the provided source metadata.
+- No hallucinations.
+- No fake benchmarks.
+- No fake product capabilities.
+- No fake quotes.
+- No fake customer names.
+- No exaggerated claims.
+- Do not add facts, numbers, dates, benchmarks, funding amounts, product claims, quotes, customer names, or timelines.
 - Do not browse or rely on memory.
 - Do not use em dashes.
+- Keep the post readable and human.
+- Use short paragraphs.
+- Avoid corporate fluff.
 - Avoid generic AI hype.
-- Tone: professional, trendy, human, sometimes slightly funny or sarcastic.
-- Style variation for today: {style}
+- Voice: sharp Product Manager who tracks AI deeply.
+- Required style for this draft: {style}
+- The style must be one of: Product teardown, Launch analysis, Founder/investor signal, PM lesson, Slightly sarcastic industry observation, What this means for builders breakdown.
+- End with a strong opinion, question, or PM takeaway.
 - Output valid JSON only with these keys: hook, body, ending, fact_check_notes.
 - fact_check_notes must be a list of short strings.
 
