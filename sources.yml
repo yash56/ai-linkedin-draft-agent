@@ -1,0 +1,45 @@
+sources:
+  - name: OpenAI News
+    url: https://openai.com/news/rss.xml
+    category: ai
+    credibility: official
+  - name: Google DeepMind Blog
+    url: https://www.deepmind.com/blog/rss.xml
+    category: ai
+    credibility: official
+  - name: Google AI Blog
+    url: https://blog.google/technology/ai/rss/
+    category: ai
+    credibility: official
+  - name: Microsoft AI Blog
+    url: https://blogs.microsoft.com/ai/feed/
+    category: ai
+    credibility: official
+  - name: Meta News
+    url: https://about.fb.com/news/feed/
+    category: ai
+    credibility: official
+  - name: TechCrunch AI
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    category: ai
+    credibility: credible
+  - name: The Verge AI
+    url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    category: ai
+    credibility: credible
+  - name: VentureBeat AI
+    url: https://venturebeat.com/category/ai/feed/
+    category: ai
+    credibility: credible
+  - name: Product Talk
+    url: https://www.producttalk.org/feed/
+    category: product-management
+    credibility: credible
+  - name: Silicon Valley Product Group
+    url: https://www.svpg.com/feed/
+    category: product-management
+    credibility: credible
+  - name: Product Coalition
+    url: https://productcoalition.com/feed
+    category: product-management
+    credibility: credible
