@@ -29,6 +29,7 @@ Slack Sender
 - Gives configured trusted sources extra ranking weight.
 - Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
 - Writes like a sharp Product Manager who tracks AI deeply, using one of six rotating styles.
+- Runs an automated source-pack claim audit before sending drafts to Slack.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Includes hook, post body, suggested ending, source links, and fact-check notes.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
@@ -56,6 +57,12 @@ Each generated post uses one of these styles:
 - What this means for builders breakdown
 
 The prompt requires short paragraphs, no corporate fluff, no unsupported claims, and an ending with a strong opinion, question, or PM takeaway.
+
+## Fact-check pass
+
+Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, and RSS summary.
+
+If a factual-looking claim is not supported by that source pack, the agent removes or rewrites it conservatively and adds a `Risk flags` section to the Slack output.
 
 ## Setup
 
