@@ -39,6 +39,13 @@ class NewsSource:
 
 
 @dataclasses.dataclass(frozen=True)
+class AgentConfig:
+    topics: list[str]
+    trusted_sources: list[str]
+    sources: list[NewsSource]
+
+
+@dataclasses.dataclass(frozen=True)
 class NewsItem:
     title: str
     url: str
@@ -72,7 +79,7 @@ def configure_logging() -> None:
     )
 
 
-def load_sources(path: str) -> list[NewsSource]:
+def load_config(path: str) -> AgentConfig:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
@@ -83,6 +90,10 @@ def load_sources(path: str) -> list[NewsSource]:
 
     sources: list[NewsSource] = []
     for raw_source in data.get("sources", []):
+        if raw_source.get("enabled", True) is False:
+            LOGGER.info("Skipping disabled source: %s", raw_source.get("name", raw_source.get("url")))
+            continue
+
         name = str(raw_source.get("name", "")).strip()
         url = str(raw_source.get("url", "")).strip()
         category = str(raw_source.get("category", "ai")).strip().lower()
@@ -104,7 +115,18 @@ def load_sources(path: str) -> list[NewsSource]:
     if not sources:
         raise AgentError("No valid sources configured.")
 
-    return sources
+    topics = [str(topic).strip() for topic in data.get("topics", []) if str(topic).strip()]
+    trusted_sources = [
+        str(source).strip()
+        for source in data.get("trusted_sources", [])
+        if str(source).strip()
+    ]
+
+    return AgentConfig(
+        topics=topics,
+        trusted_sources=trusted_sources,
+        sources=sources,
+    )
 
 
 def parse_datetime(value: Any) -> dt.datetime | None:
@@ -170,10 +192,10 @@ def fetch_feed(source: NewsSource) -> list[dict[str, Any]]:
     return list(parsed.entries)
 
 
-def collect_news(sources: list[NewsSource], fresh_hours: int, now: dt.datetime) -> list[NewsItem]:
+def collect_news(config: AgentConfig, fresh_hours: int, now: dt.datetime) -> list[NewsItem]:
     items: list[NewsItem] = []
 
-    for source in sources:
+    for source in config.sources:
         for entry in fetch_feed(source):
             title = clean_text(str(entry.get("title", "")), max_length=180)
             url = str(entry.get("link", "")).strip()
@@ -201,17 +223,21 @@ def collect_news(sources: list[NewsSource], fresh_hours: int, now: dt.datetime) 
                 str(entry.get("summary") or entry.get("description") or ""),
                 max_length=360,
             )
-            items.append(
-                NewsItem(
-                    title=title,
-                    url=url,
-                    published_at=published_at,
-                    source_name=source.name,
-                    category=source.category,
-                    credibility=source.credibility,
-                    summary=summary,
-                )
+            item = NewsItem(
+                title=title,
+                url=url,
+                published_at=published_at,
+                source_name=source.name,
+                category=source.category,
+                credibility=source.credibility,
+                summary=summary,
             )
+
+            if not matches_configured_topics(item, config.topics):
+                LOGGER.debug("Rejecting item outside configured topics: %s", title)
+                continue
+
+            items.append(item)
 
     return dedupe_items(items)
 
@@ -228,7 +254,33 @@ def dedupe_items(items: list[NewsItem]) -> list[NewsItem]:
     return deduped
 
 
-def score_item(item: NewsItem, now: dt.datetime) -> float:
+def matches_configured_topics(item: NewsItem, topics: list[str]) -> bool:
+    if not topics:
+        return True
+
+    searchable_text = " ".join(
+        [
+            item.title,
+            item.summary,
+            item.source_name,
+            item.category,
+        ]
+    ).lower()
+
+    return any(topic.lower() in searchable_text for topic in topics)
+
+
+def is_trusted_source(item: NewsItem, trusted_sources: list[str]) -> bool:
+    source_name = item.source_name.lower()
+    return any(trusted.lower() in source_name or source_name in trusted.lower() for trusted in trusted_sources)
+
+
+def topic_score(item: NewsItem, topics: list[str]) -> int:
+    searchable_text = f"{item.title} {item.summary} {item.source_name} {item.category}".lower()
+    return sum(1 for topic in topics if topic.lower() in searchable_text)
+
+
+def score_item(item: NewsItem, now: dt.datetime, config: AgentConfig) -> float:
     age_hours = max((now - item.published_at).total_seconds() / 3600, 0)
     credibility_bonus = {
         "official": 40,
@@ -238,12 +290,14 @@ def score_item(item: NewsItem, now: dt.datetime) -> float:
     }.get(item.credibility, 10)
     category_bonus = 8 if item.category in {"ai", "product", "product-management"} else 0
     title_bonus = 4 if re.search(r"\b(ai|product|pm|launch|update|model|agent)\b", item.title, re.I) else 0
+    trusted_bonus = 10 if is_trusted_source(item, config.trusted_sources) else 0
+    topic_bonus = min(topic_score(item, config.topics) * 4, 16)
     freshness_bonus = max(0, 48 - age_hours)
-    return credibility_bonus + category_bonus + title_bonus + freshness_bonus
+    return credibility_bonus + category_bonus + title_bonus + trusted_bonus + topic_bonus + freshness_bonus
 
 
-def rank_items(items: list[NewsItem], now: dt.datetime, limit: int = MAX_DRAFTS) -> list[NewsItem]:
-    ranked = sorted(items, key=lambda item: (score_item(item, now), item.published_at), reverse=True)
+def rank_items(items: list[NewsItem], now: dt.datetime, config: AgentConfig, limit: int = MAX_DRAFTS) -> list[NewsItem]:
+    ranked = sorted(items, key=lambda item: (score_item(item, now, config), item.published_at), reverse=True)
     return ranked[:limit]
 
 
@@ -392,11 +446,11 @@ def run() -> int:
     if args.fresh_hours < 24 or args.fresh_hours > 48:
         raise AgentError("Freshness window must be between 24 and 48 hours.")
 
-    sources = load_sources(args.sources)
-    items = collect_news(sources, args.fresh_hours, now)
+    config = load_config(args.sources)
+    items = collect_news(config, args.fresh_hours, now)
     LOGGER.info("Collected %s qualifying fresh item(s).", len(items))
 
-    selected = rank_items(items, now, limit=MAX_DRAFTS)
+    selected = rank_items(items, now, config, limit=MAX_DRAFTS)
     if len(selected) < MIN_DRAFTS:
         LOGGER.warning("Only %s qualifying item(s) found. The agent will not invent filler topics.", len(selected))
 
