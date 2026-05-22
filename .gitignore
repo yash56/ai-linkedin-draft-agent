@@ -1,6 +1,7 @@
 .env
 .venv/
 .deps/
+.verify-deps/
 .pip-cache/
 __pycache__/
 *.pyc
