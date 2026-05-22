@@ -28,6 +28,7 @@ Slack Sender
 - Filters for configured topics such as AI agents, Gemini, ChatGPT, Claude, Product Management, launches, and coding agents.
 - Gives configured trusted sources extra ranking weight.
 - Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
+- Writes like a sharp Product Manager who tracks AI deeply, using one of six rotating styles.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Includes hook, post body, suggested ending, source links, and fact-check notes.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
@@ -42,6 +43,19 @@ Edit `sources.yml` to tune:
 - `sources`: enabled RSS feeds with source names, categories, and credibility labels.
 
 Anthropic is listed as a trusted source and topic, but its requested RSS URL is disabled because it returned 404 during verification.
+
+## Writing styles
+
+Each generated post uses one of these styles:
+
+- Product teardown
+- Launch analysis
+- Founder/investor signal
+- PM lesson
+- Slightly sarcastic industry observation
+- What this means for builders breakdown
+
+The prompt requires short paragraphs, no corporate fluff, no unsupported claims, and an ending with a strong opinion, question, or PM takeaway.
 
 ## Setup
 
