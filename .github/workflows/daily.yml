@@ -26,6 +26,8 @@ jobs:
       - name: Generate and send LinkedIn drafts
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-3-flash-preview
           FRESH_HOURS: "48"
           LOG_LEVEL: INFO
         run: python agent.py

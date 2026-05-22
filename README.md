@@ -27,6 +27,7 @@ Slack Sender
 - Prefers official sources, then credible tech and product sources.
 - Filters for configured topics such as AI agents, Gemini, ChatGPT, Claude, Product Management, launches, and coding agents.
 - Gives configured trusted sources extra ranking weight.
+- Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Includes hook, post body, suggested ending, source links, and fact-check notes.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
@@ -75,8 +76,9 @@ Add this repository secret before enabling the workflow:
 
 ```text
 SLACK_WEBHOOK_URL
+GEMINI_API_KEY
 ```
 
 ## Notes
 
-This MVP intentionally uses deterministic source-backed templates instead of asking a language model to invent prose from memory. That keeps the daily output safer and easier to fact-check. If you later add an LLM rewrite step, keep the source metadata and fact-check notes as hard constraints.
+Gemini receives only the verified RSS metadata for each selected item: title, source, published date, URL, category, credibility, and summary. If `GEMINI_API_KEY` is missing or the Gemini call fails, the agent falls back to deterministic source-backed templates.

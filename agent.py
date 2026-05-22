@@ -6,6 +6,7 @@ import argparse
 import dataclasses
 import datetime as dt
 import html
+import json
 import logging
 import os
 import random
@@ -24,10 +25,12 @@ LOGGER = logging.getLogger("ai_linkedin_draft_agent")
 UTC = dt.timezone.utc
 DEFAULT_SOURCE_FILE = "sources.yml"
 DEFAULT_FRESH_HOURS = 48
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 MIN_DRAFTS = 2
 MAX_DRAFTS = 3
 REQUEST_TIMEOUT_SECONDS = 20
 USER_AGENT = "ai-linkedin-draft-agent/0.1 (+source-backed LinkedIn drafts)"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -313,7 +316,17 @@ def style_for_day(now: dt.datetime) -> str:
     return random.choice(styles)
 
 
-def write_draft(item: NewsItem, style: str) -> Draft:
+def write_draft(item: NewsItem, style: str, gemini_api_key: str, gemini_model: str) -> Draft:
+    if gemini_api_key:
+        try:
+            return write_gemini_draft(item, style, gemini_api_key, gemini_model)
+        except AgentError as exc:
+            LOGGER.warning("Gemini draft failed for %s. Falling back to template: %s", item.title, exc)
+
+    return write_template_draft(item, style)
+
+
+def write_template_draft(item: NewsItem, style: str) -> Draft:
     date_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
     summary_sentence = (
         f"The source summary says: {item.summary}"
@@ -383,6 +396,151 @@ def write_draft(item: NewsItem, style: str) -> Draft:
         source_links=[item.url],
         fact_check_notes=fact_notes,
     )
+
+
+def write_gemini_draft(item: NewsItem, style: str, api_key: str, model: str) -> Draft:
+    prompt = build_gemini_prompt(item, style)
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.75,
+            "responseMimeType": "application/json",
+        },
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+        "x-goog-api-key": api_key,
+    }
+    url = GEMINI_API_URL.format(model=model)
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        response_payload = response.json()
+    except requests.RequestException as exc:
+        raise AgentError(f"Gemini API request failed: {exc}") from exc
+    except ValueError as exc:
+        raise AgentError("Gemini API returned non-JSON response.") from exc
+
+    generated_text = extract_gemini_text(response_payload)
+    draft_data = parse_gemini_json(generated_text)
+
+    hook = require_text_field(draft_data, "hook")
+    body = require_text_field(draft_data, "body")
+    ending = require_text_field(draft_data, "ending")
+    notes = draft_data.get("fact_check_notes", [])
+    if not isinstance(notes, list):
+        raise AgentError("Gemini response field fact_check_notes must be a list.")
+
+    fact_notes = [clean_text(str(note), max_length=240) for note in notes if str(note).strip()]
+    fact_notes.extend(
+        [
+            f"Title, source, URL, and published date came from {item.source_name}'s RSS feed.",
+            "Gemini generated wording only from supplied source metadata and summary.",
+            "No extra facts should be posted unless verified in the linked article.",
+        ]
+    )
+
+    return Draft(
+        topic=item,
+        hook=sanitize_generated_text(hook),
+        body=sanitize_generated_text(body),
+        ending=sanitize_generated_text(ending),
+        source_links=[item.url],
+        fact_check_notes=dedupe_text(fact_notes),
+    )
+
+
+def build_gemini_prompt(item: NewsItem, style: str) -> str:
+    published_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
+    summary = item.summary or "No usable RSS summary was provided."
+    return f"""
+You are writing one LinkedIn draft for a professional audience.
+
+Hard rules:
+- Use only the source metadata below.
+- Do not add facts, numbers, dates, benchmarks, funding amounts, product claims, quotes, or timelines.
+- Do not browse or rely on memory.
+- Do not use em dashes.
+- Avoid generic AI hype.
+- Tone: professional, trendy, human, sometimes slightly funny or sarcastic.
+- Style variation for today: {style}
+- Output valid JSON only with these keys: hook, body, ending, fact_check_notes.
+- fact_check_notes must be a list of short strings.
+
+Source metadata:
+Title: {item.title}
+Source: {item.source_name}
+Published at: {published_text}
+Category: {item.category}
+Credibility: {item.credibility}
+URL: {item.url}
+RSS summary: {summary}
+
+Write:
+1. hook: 1 to 2 sentences.
+2. body: 3 to 6 short paragraphs or a concise numbered list.
+3. ending: 1 question or closing line.
+4. fact_check_notes: what was used and what must be verified before posting.
+""".strip()
+
+
+def extract_gemini_text(payload: dict[str, Any]) -> str:
+    try:
+        parts = payload["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise AgentError("Gemini response did not include candidate text.") from exc
+
+    text = "".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+    if not text.strip():
+        raise AgentError("Gemini response text was empty.")
+    return text.strip()
+
+
+def parse_gemini_json(text: str) -> dict[str, Any]:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        value = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise AgentError("Gemini response was not valid JSON.") from exc
+
+    if not isinstance(value, dict):
+        raise AgentError("Gemini response JSON must be an object.")
+    return value
+
+
+def require_text_field(data: dict[str, Any], field_name: str) -> str:
+    value = str(data.get(field_name, "")).strip()
+    if not value:
+        raise AgentError(f"Gemini response missing required field: {field_name}")
+    return value
+
+
+def dedupe_text(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        normalized = value.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(value)
+    return deduped
 
 
 def sanitize_generated_text(value: str) -> str:
@@ -455,7 +613,14 @@ def run() -> int:
         LOGGER.warning("Only %s qualifying item(s) found. The agent will not invent filler topics.", len(selected))
 
     style = style_for_day(now)
-    drafts = [write_draft(item, style) for item in selected]
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+    if gemini_api_key:
+        LOGGER.info("Using Gemini model for draft writing: %s", gemini_model)
+    else:
+        LOGGER.info("GEMINI_API_KEY is not set. Using deterministic template writer.")
+
+    drafts = [write_draft(item, style, gemini_api_key, gemini_model) for item in selected]
     message = build_slack_message(drafts, now)
 
     if args.dry_run:
