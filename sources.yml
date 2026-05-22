@@ -1,3 +1,37 @@
+topics:
+  - AI agents
+  - Gemini
+  - ChatGPT
+  - Claude
+  - OpenAI
+  - Google DeepMind
+  - Anthropic
+  - Perplexity
+  - Product Management
+  - product launches
+  - AI product management
+  - coding agents
+
+trusted_sources:
+  - Google Blog
+  - Google DeepMind
+  - OpenAI
+  - Anthropic
+  - Microsoft
+  - TechCrunch
+  - The Verge
+  - Wired
+  - Lenny's Newsletter
+  - Product Coalition
+  - Mind the Product
+
+rss_feeds:
+  - https://blog.google/technology/ai/rss/
+  - https://openai.com/news/rss.xml
+  - https://www.anthropic.com/news/rss.xml
+  - https://techcrunch.com/category/artificial-intelligence/feed/
+  - https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+
 sources:
   - name: OpenAI News
     url: https://openai.com/news/rss.xml
@@ -11,6 +45,13 @@ sources:
     url: https://blog.google/technology/ai/rss/
     category: ai
     credibility: official
+  # This user-requested Anthropic RSS URL returned 404 during verification.
+  # Keep Anthropic in trusted_sources/topics, but do not fetch this feed until a working official RSS URL is available.
+  - name: Anthropic News
+    url: https://www.anthropic.com/news/rss.xml
+    category: ai
+    credibility: official
+    enabled: false
   - name: Microsoft AI Blog
     url: https://blogs.microsoft.com/ai/feed/
     category: ai
@@ -25,6 +66,10 @@ sources:
     credibility: credible
   - name: The Verge AI
     url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+    category: ai
+    credibility: credible
+  - name: Wired AI
+    url: https://www.wired.com/feed/tag/ai/latest/rss
     category: ai
     credibility: credible
   - name: VentureBeat AI
