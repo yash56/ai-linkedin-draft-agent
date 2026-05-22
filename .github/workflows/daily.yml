@@ -1,0 +1,31 @@
+name: Daily LinkedIn Draft Agent
+
+on:
+  schedule:
+    # 9:00 AM IST is 3:30 AM UTC.
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate and send LinkedIn drafts
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          FRESH_HOURS: "48"
+          LOG_LEVEL: INFO
+        run: python agent.py
