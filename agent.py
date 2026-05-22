@@ -741,14 +741,15 @@ def format_draft(draft: Draft, index: int) -> str:
     source_links = "\n".join(f"- {link}" for link in draft.source_links)
     fact_notes = "\n".join(f"- {note}" for note in draft.fact_check_notes)
     risk_flags = "\n".join(f"- {flag}" for flag in draft.risk_flags)
-    risk_section = f"\n\n*Risk flags*\n{risk_flags}" if risk_flags else ""
+    risk_section = f"\n\nRisk flags:\n{risk_flags}" if risk_flags else ""
     return (
-        f"*Draft {index}: {draft.topic.title}*\n\n"
-        f"*Hook*\n{draft.hook}\n\n"
-        f"*LinkedIn post body*\n{draft.body}\n\n"
-        f"*Suggested ending*\n{draft.ending}\n\n"
-        f"*Source links*\n{source_links}\n\n"
-        f"*Fact-check notes*\n{fact_notes}"
+        f"Draft {index}:\n"
+        f"Title: {draft.topic.title}\n\n"
+        f"Hook:\n{draft.hook}\n\n"
+        f"LinkedIn post body:\n{draft.body}\n\n"
+        f"Suggested ending:\n{draft.ending}\n\n"
+        f"Sources:\n{source_links}\n\n"
+        f"Fact-check notes:\n{fact_notes}"
         f"{risk_section}"
     )
 
@@ -757,14 +758,16 @@ def build_slack_message(drafts: list[Draft], now: dt.datetime) -> str:
     date_text = now.strftime("%Y-%m-%d")
     if not drafts:
         return (
-            f"*AI LinkedIn Draft Agent - {date_text}*\n\n"
+            f"Daily AI + PM LinkedIn Drafts\n"
+            f"Date: {date_text}\n\n"
             "No qualifying source-backed AI/Product news items were found in the freshness window. "
             "No drafts were generated because making things up is not a content strategy."
         )
 
     parts = [
         (
-            f"*AI LinkedIn Draft Agent - {date_text}*\n\n"
+            f"Daily AI + PM LinkedIn Drafts\n"
+            f"Date: {date_text}\n\n"
             f"Generated {len(drafts)} source-backed LinkedIn draft(s)."
         ),
     ]
