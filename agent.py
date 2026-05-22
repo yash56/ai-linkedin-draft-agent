@@ -1,0 +1,432 @@
+"""Daily source-backed LinkedIn draft agent for AI and product news."""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import datetime as dt
+import html
+import logging
+import os
+import random
+import re
+from email.utils import parsedate_to_datetime
+from typing import Any
+
+import feedparser
+import requests
+import yaml
+from dateutil import parser as date_parser
+from dotenv import load_dotenv
+
+
+LOGGER = logging.getLogger("ai_linkedin_draft_agent")
+UTC = dt.timezone.utc
+DEFAULT_SOURCE_FILE = "sources.yml"
+DEFAULT_FRESH_HOURS = 48
+MIN_DRAFTS = 2
+MAX_DRAFTS = 3
+REQUEST_TIMEOUT_SECONDS = 20
+USER_AGENT = "ai-linkedin-draft-agent/0.1 (+source-backed LinkedIn drafts)"
+
+
+@dataclasses.dataclass(frozen=True)
+class NewsSource:
+    name: str
+    url: str
+    category: str
+    credibility: str
+
+
+@dataclasses.dataclass(frozen=True)
+class NewsItem:
+    title: str
+    url: str
+    published_at: dt.datetime
+    source_name: str
+    category: str
+    credibility: str
+    summary: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Draft:
+    topic: NewsItem
+    hook: str
+    body: str
+    ending: str
+    source_links: list[str]
+    fact_check_notes: list[str]
+
+
+class AgentError(Exception):
+    """Base exception for expected agent failures."""
+
+
+def configure_logging() -> None:
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+
+
+def load_sources(path: str) -> list[NewsSource]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except FileNotFoundError as exc:
+        raise AgentError(f"Source file not found: {path}") from exc
+    except yaml.YAMLError as exc:
+        raise AgentError(f"Could not parse source file: {path}") from exc
+
+    sources: list[NewsSource] = []
+    for raw_source in data.get("sources", []):
+        name = str(raw_source.get("name", "")).strip()
+        url = str(raw_source.get("url", "")).strip()
+        category = str(raw_source.get("category", "ai")).strip().lower()
+        credibility = str(raw_source.get("credibility", "news")).strip().lower()
+
+        if not name or not url:
+            LOGGER.warning("Skipping source with missing name or url: %s", raw_source)
+            continue
+
+        sources.append(
+            NewsSource(
+                name=name,
+                url=url,
+                category=category,
+                credibility=credibility,
+            )
+        )
+
+    if not sources:
+        raise AgentError("No valid sources configured.")
+
+    return sources
+
+
+def parse_datetime(value: Any) -> dt.datetime | None:
+    if not value:
+        return None
+
+    if isinstance(value, dt.datetime):
+        parsed = value
+    elif isinstance(value, tuple):
+        parsed = dt.datetime(*value[:6], tzinfo=UTC)
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = parsedate_to_datetime(text)
+        except (TypeError, ValueError):
+            try:
+                parsed = date_parser.parse(text)
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+
+    return parsed.astimezone(UTC)
+
+
+def clean_text(value: str, max_length: int = 320) -> str:
+    text = html.unescape(value or "")
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = text.replace("\u2014", ",")
+    text = text.replace("\u2013", "-")
+    if len(text) > max_length:
+        return text[: max_length - 1].rstrip() + "..."
+    return text
+
+
+def normalize_url(url: str) -> str:
+    return re.sub(r"[?#].*$", "", url.strip().lower()).rstrip("/")
+
+
+def is_fresh(published_at: dt.datetime, now: dt.datetime, fresh_hours: int) -> bool:
+    age = now - published_at
+    return dt.timedelta(0) <= age <= dt.timedelta(hours=fresh_hours)
+
+
+def fetch_feed(source: NewsSource) -> list[dict[str, Any]]:
+    LOGGER.info("Fetching source: %s", source.name)
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        response = requests.get(source.url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        LOGGER.warning("Failed to fetch %s: %s", source.name, exc)
+        return []
+
+    parsed = feedparser.parse(response.content)
+    if parsed.bozo:
+        LOGGER.warning("Feed parse warning for %s: %s", source.name, parsed.bozo_exception)
+
+    return list(parsed.entries)
+
+
+def collect_news(sources: list[NewsSource], fresh_hours: int, now: dt.datetime) -> list[NewsItem]:
+    items: list[NewsItem] = []
+
+    for source in sources:
+        for entry in fetch_feed(source):
+            title = clean_text(str(entry.get("title", "")), max_length=180)
+            url = str(entry.get("link", "")).strip()
+            raw_date = (
+                entry.get("published")
+                or entry.get("updated")
+                or entry.get("created")
+                or entry.get("published_parsed")
+                or entry.get("updated_parsed")
+            )
+            published_at = parse_datetime(raw_date)
+
+            if not title or not url or not published_at:
+                LOGGER.debug(
+                    "Rejecting item missing title, url, or published date from %s",
+                    source.name,
+                )
+                continue
+
+            if not is_fresh(published_at, now, fresh_hours):
+                LOGGER.debug("Rejecting stale item: %s", title)
+                continue
+
+            summary = clean_text(
+                str(entry.get("summary") or entry.get("description") or ""),
+                max_length=360,
+            )
+            items.append(
+                NewsItem(
+                    title=title,
+                    url=url,
+                    published_at=published_at,
+                    source_name=source.name,
+                    category=source.category,
+                    credibility=source.credibility,
+                    summary=summary,
+                )
+            )
+
+    return dedupe_items(items)
+
+
+def dedupe_items(items: list[NewsItem]) -> list[NewsItem]:
+    seen: set[str] = set()
+    deduped: list[NewsItem] = []
+    for item in items:
+        key = normalize_url(item.url) or item.title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def score_item(item: NewsItem, now: dt.datetime) -> float:
+    age_hours = max((now - item.published_at).total_seconds() / 3600, 0)
+    credibility_bonus = {
+        "official": 40,
+        "primary": 35,
+        "credible": 20,
+        "news": 15,
+    }.get(item.credibility, 10)
+    category_bonus = 8 if item.category in {"ai", "product", "product-management"} else 0
+    title_bonus = 4 if re.search(r"\b(ai|product|pm|launch|update|model|agent)\b", item.title, re.I) else 0
+    freshness_bonus = max(0, 48 - age_hours)
+    return credibility_bonus + category_bonus + title_bonus + freshness_bonus
+
+
+def rank_items(items: list[NewsItem], now: dt.datetime, limit: int = MAX_DRAFTS) -> list[NewsItem]:
+    ranked = sorted(items, key=lambda item: (score_item(item, now), item.published_at), reverse=True)
+    return ranked[:limit]
+
+
+def style_for_day(now: dt.datetime) -> str:
+    styles = [
+        "sharp_observation",
+        "pm_lens",
+        "casual_skeptic",
+        "builder_note",
+        "strategy_snapshot",
+    ]
+    random.seed(now.strftime("%Y-%m-%d"))
+    return random.choice(styles)
+
+
+def write_draft(item: NewsItem, style: str) -> Draft:
+    date_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
+    summary_sentence = (
+        f"The source summary says: {item.summary}"
+        if item.summary
+        else "The RSS item did not include a usable summary, so this draft sticks to the title and source link."
+    )
+
+    hooks = {
+        "sharp_observation": f"The interesting part of this AI/Product update is not the headline. It is what teams will do next: {item.title}",
+        "pm_lens": f"PM lens on today's news: {item.title}",
+        "casual_skeptic": f"Another AI headline, yes. But this one is worth a calmer second look: {item.title}",
+        "builder_note": f"Builder note: {item.title}",
+        "strategy_snapshot": f"Strategy snapshot: {item.title}",
+    }
+
+    body_templates = {
+        "sharp_observation": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "What I would watch from here:\n"
+            "1. Whether this changes an actual user workflow.\n"
+            "2. Whether the product story is clear without extra hype.\n"
+            "3. Whether teams can explain the value in one sentence without needing a fog machine."
+        ),
+        "pm_lens": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "A simple product question to ask: who gets a noticeably easier day because of this?\n\n"
+            "If the answer is specific, there may be a real product signal here. If the answer is everyone, everywhere, instantly, bring snacks because we are entering hype theater."
+        ),
+        "casual_skeptic": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "I like this as a reminder that AI news is most useful when we separate the announcement from the adoption path. Headlines are loud. Workflows are where the truth gets annoyingly specific."
+        ),
+        "builder_note": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "For builders and PMs, the practical read is to look for the smallest repeatable behavior this could unlock. New capability is nice. New habit is the prize."
+        ),
+        "strategy_snapshot": (
+            f"{item.source_name} published this on {date_text}.\n\n"
+            f"{summary_sentence}\n\n"
+            "The strategic question is not whether this sounds impressive. It is whether it changes distribution, trust, cost, or speed for the people using the product."
+        ),
+    }
+
+    endings = {
+        "sharp_observation": "Curious what others see here: real workflow shift, or just another shiny tab in the browser?",
+        "pm_lens": "What would you test first if this landed on your roadmap?",
+        "casual_skeptic": "My bar: show me the changed user behavior, then I will clap loudly and responsibly.",
+        "builder_note": "Worth tracking, especially if it turns into a user habit rather than a launch-day screenshot.",
+        "strategy_snapshot": "The signal to watch is whether customers explain the value in plain language without borrowing the press release.",
+    }
+
+    fact_notes = [
+        f"Title, source, URL, and published date came from {item.source_name}'s RSS feed.",
+        "No benchmarks, funding amounts, timelines, or product claims were added beyond the source metadata and summary.",
+        "Verify the linked article before posting if you want to include extra specifics.",
+    ]
+
+    return Draft(
+        topic=item,
+        hook=sanitize_generated_text(hooks[style]),
+        body=sanitize_generated_text(body_templates[style]),
+        ending=sanitize_generated_text(endings[style]),
+        source_links=[item.url],
+        fact_check_notes=fact_notes,
+    )
+
+
+def sanitize_generated_text(value: str) -> str:
+    return value.replace("\u2014", ",").replace("\u2013", "-")
+
+
+def format_draft(draft: Draft, index: int) -> str:
+    source_links = "\n".join(f"- {link}" for link in draft.source_links)
+    fact_notes = "\n".join(f"- {note}" for note in draft.fact_check_notes)
+    return (
+        f"*Draft {index}: {draft.topic.title}*\n\n"
+        f"*Hook*\n{draft.hook}\n\n"
+        f"*LinkedIn post body*\n{draft.body}\n\n"
+        f"*Suggested ending*\n{draft.ending}\n\n"
+        f"*Source links*\n{source_links}\n\n"
+        f"*Fact-check notes*\n{fact_notes}"
+    )
+
+
+def build_slack_message(drafts: list[Draft], now: dt.datetime) -> str:
+    date_text = now.strftime("%Y-%m-%d")
+    if not drafts:
+        return (
+            f"*AI LinkedIn Draft Agent - {date_text}*\n\n"
+            "No qualifying source-backed AI/Product news items were found in the freshness window. "
+            "No drafts were generated because making things up is not a content strategy."
+        )
+
+    parts = [
+        (
+            f"*AI LinkedIn Draft Agent - {date_text}*\n\n"
+            f"Generated {len(drafts)} source-backed LinkedIn draft(s)."
+        ),
+    ]
+    parts.extend(format_draft(draft, index) for index, draft in enumerate(drafts, start=1))
+    return "\n\n---\n\n".join(parts)
+
+
+def send_to_slack(message: str, webhook_url: str) -> None:
+    try:
+        response = requests.post(webhook_url, json={"text": message}, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise AgentError(f"Slack webhook send failed: {exc}") from exc
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate source-backed LinkedIn drafts from fresh news.")
+    parser.add_argument("--sources", default=DEFAULT_SOURCE_FILE, help="Path to sources.yml.")
+    parser.add_argument("--fresh-hours", type=int, default=int(os.getenv("FRESH_HOURS", DEFAULT_FRESH_HOURS)))
+    parser.add_argument("--dry-run", action="store_true", help="Print output instead of sending to Slack.")
+    return parser.parse_args()
+
+
+def run() -> int:
+    load_dotenv()
+    configure_logging()
+    args = parse_args()
+    now = dt.datetime.now(UTC)
+
+    if args.fresh_hours < 24 or args.fresh_hours > 48:
+        raise AgentError("Freshness window must be between 24 and 48 hours.")
+
+    sources = load_sources(args.sources)
+    items = collect_news(sources, args.fresh_hours, now)
+    LOGGER.info("Collected %s qualifying fresh item(s).", len(items))
+
+    selected = rank_items(items, now, limit=MAX_DRAFTS)
+    if len(selected) < MIN_DRAFTS:
+        LOGGER.warning("Only %s qualifying item(s) found. The agent will not invent filler topics.", len(selected))
+
+    style = style_for_day(now)
+    drafts = [write_draft(item, style) for item in selected]
+    message = build_slack_message(drafts, now)
+
+    if args.dry_run:
+        print(message)
+        return 0
+
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        raise AgentError("SLACK_WEBHOOK_URL is required unless --dry-run is used.")
+
+    send_to_slack(message, webhook_url)
+    LOGGER.info("Sent %s draft(s) to Slack.", len(drafts))
+    return 0
+
+
+def main() -> None:
+    try:
+        raise SystemExit(run())
+    except AgentError as exc:
+        LOGGER.error("%s", exc)
+        raise SystemExit(1)
+    except Exception:
+        LOGGER.exception("Unexpected failure.")
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
