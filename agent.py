@@ -31,6 +31,14 @@ MAX_DRAFTS = 3
 REQUEST_TIMEOUT_SECONDS = 20
 USER_AGENT = "ai-linkedin-draft-agent/0.1 (+source-backed LinkedIn drafts)"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+BAD_HOOK_PREFIXES = (
+    "gartner just released",
+    "openai has officially",
+    "this recognition",
+    "the latest report",
+    "in today's ai news",
+    "source summary",
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -504,11 +512,84 @@ def style_for_day(now: dt.datetime) -> str:
 def write_draft(item: NewsItem, style: str, gemini_api_key: str, gemini_model: str) -> Draft:
     if gemini_api_key:
         try:
-            return write_gemini_draft(item, style, gemini_api_key, gemini_model)
+            return polish_draft_readability(write_gemini_draft(item, style, gemini_api_key, gemini_model), style)
         except AgentError as exc:
             LOGGER.warning("Gemini draft failed for %s. Falling back to template: %s", item.title, exc)
 
-    return write_template_draft(item, style)
+    return polish_draft_readability(write_template_draft(item, style), style)
+
+
+def needs_better_hook(hook: str, item: NewsItem) -> bool:
+    normalized = hook.strip().lower()
+    word_count = len(re.findall(r"\b\w+\b", hook))
+    source_prefix = item.source_name.lower().split()[0]
+    title_prefix = item.title.lower().split()[0] if item.title.split() else ""
+    starts_like_report = any(normalized.startswith(prefix) for prefix in BAD_HOOK_PREFIXES)
+    starts_with_source = bool(source_prefix) and normalized.startswith(f"{source_prefix} ")
+    starts_with_title = bool(title_prefix) and normalized.startswith(f"{title_prefix} ")
+    return word_count > 24 or starts_like_report or starts_with_source or starts_with_title
+
+
+def reader_friendly_hook(item: NewsItem, style: str) -> str:
+    if style == "Slightly sarcastic industry observation":
+        return "Another AI headline. Useful, maybe. Obvious user value, that is the real test."
+    if style == "What this means for builders breakdown":
+        return "Builders should not copy the headline. They should study the user pain behind it."
+    if style == "Founder/investor signal":
+        return "The headline is loud. The useful signal is the workflow hiding underneath."
+    if style == "Launch analysis":
+        return "A launch is only interesting when it changes what users can actually do."
+    if style == "Product teardown":
+        return "Everyone will quote the headline. PMs should ask the less glamorous question."
+    return "The PM lesson is simple: impressive technology still needs an obvious user job."
+
+
+def has_reader_structure(text: str) -> bool:
+    has_heading = any(
+        heading in text
+        for heading in (
+            "Why PMs should care",
+            "What to watch",
+            "What this means",
+            "PM takeaway",
+            "Builder takeaway",
+        )
+    )
+    has_bullets = bool(re.search(r"(?m)^\s*(?:-|\d+\.)\s+", text))
+    return has_heading and has_bullets
+
+
+def add_reader_structure(body: str, item: NewsItem) -> str:
+    if has_reader_structure(body):
+        return body
+
+    structure = (
+        "Why PMs should care:\n"
+        "- It forces a clearer read on the actual user workflow.\n"
+        "- It separates product value from announcement value.\n"
+        "- It gives teams a better question than \"is this impressive?\"\n\n"
+        "What to watch:\n"
+        "- Who benefits first from this update.\n"
+        "- Whether the source proves a real workflow improvement, not just a sharper demo."
+    )
+    return f"{body.strip()}\n\n{structure}"
+
+
+def polish_draft_readability(draft: Draft, style: str) -> Draft:
+    hook = draft.hook
+    if needs_better_hook(hook, draft.topic):
+        hook = reader_friendly_hook(draft.topic, style)
+
+    body = add_reader_structure(draft.body, draft.topic)
+    return Draft(
+        topic=draft.topic,
+        hook=sanitize_generated_text(hook),
+        body=sanitize_generated_text(body),
+        ending=draft.ending,
+        source_links=draft.source_links,
+        fact_check_notes=draft.fact_check_notes,
+        risk_flags=draft.risk_flags,
+    )
 
 
 def write_template_draft(item: NewsItem, style: str) -> Draft:
@@ -520,12 +601,12 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
     )
 
     hooks = {
-        "Product teardown": f"Product teardown: {item.title}",
-        "Launch analysis": f"Launch analysis: {item.title}",
-        "Founder/investor signal": f"Founder/investor signal: {item.title}",
-        "PM lesson": f"PM lesson from today's AI news: {item.title}",
-        "Slightly sarcastic industry observation": f"Another AI headline, yes. This one is worth a sharper PM read: {item.title}",
-        "What this means for builders breakdown": f"What this means for builders: {item.title}",
+        "Product teardown": "Everyone will quote the headline. PMs should ask the less glamorous question.",
+        "Launch analysis": "A launch is only interesting when it changes what users can actually do.",
+        "Founder/investor signal": "The headline is loud. The useful signal is the workflow hiding underneath.",
+        "PM lesson": "The PM lesson is simple: impressive technology still needs an obvious user job.",
+        "Slightly sarcastic industry observation": "Another AI headline. Useful, maybe. Obvious user value, that is the real test.",
+        "What this means for builders breakdown": "Builders should not copy the headline. They should study the user pain behind it.",
     }
 
     body_templates = {
@@ -699,7 +780,14 @@ Hard rules:
 - Length: aim for 180 to 300 words total across hook, body, and ending.
 - Write like a ready-to-post LinkedIn draft for PMs, founders, and AI builders.
 - The reader should understand the post even if they have not read the article.
-- Start with clear context, not a clever insider take.
+- Start with a human hook that creates curiosity, not a report summary.
+- The hook must be 10 to 22 words.
+- The hook must avoid jargon piles and should be easy for a smart non-expert to understand.
+- Do not start the hook with the source name, report title, company name, publication date, or phrases like "Gartner just released", "OpenAI has officially", "This recognition", or "The latest report".
+- Good hook patterns:
+  - "The headline is about X. The real PM question is Y."
+  - "Everyone will notice X. Builders should watch Y."
+  - "This looks like a news item, but it is really about Y."
 - Explain what happened in plain English using only the source metadata.
 - Explain why it matters for product teams, builders, or AI adoption.
 - End with one concrete PM takeaway or question.
@@ -708,7 +796,10 @@ Hard rules:
 - Avoid dramatic claims about velocity, quality, enterprise adoption, deadlines, customer impact, defects, benchmarks, or market demand unless those exact facts appear in the source metadata.
 - Do not include labels like Hook, Body, Suggested ending, Sources, Fact-check notes, or Risk flags in the draft text.
 - Do not mention fact-checking inside the LinkedIn post.
-- You may use simple LinkedIn-style section labels only if they help the reader, such as: What happened, Why it matters, PM takeaway.
+- The body must include 2 short reader-friendly section labels.
+- The body must include at least one bullet list with 3 bullets.
+- Use simple LinkedIn-style section labels such as: What happened, Why PMs should care, What builders should watch, PM takeaway.
+- Avoid dense paragraphs longer than 2 sentences.
 - Required style for this draft: {style}
 - The style must be one of: Product teardown, Launch analysis, Founder/investor signal, PM lesson, Slightly sarcastic industry observation, What this means for builders breakdown.
 - End with a strong opinion, question, or PM takeaway.
@@ -725,8 +816,8 @@ URL: {item.url}
 RSS summary: {summary}
 
 Write:
-1. hook: 1 to 2 clear opening lines that state the topic and why a PM should care.
-2. body: 5 to 8 short paragraphs. Use this flow: context, what happened, why it matters, PM/builder implication, practical takeaway.
+1. hook: 1 strong opening line that makes the reader curious without exaggerating.
+2. body: 5 to 8 short blocks. Use this flow: context, what happened, why it matters, one bullet list, what to watch next.
 3. ending: 1 specific opinion, question, or PM takeaway that follows from the source.
 4. fact_check_notes: internal notes only. These are not shown in Slack.
 
@@ -734,6 +825,8 @@ Quality bar:
 - A non-technical reader should be able to summarize the point in one sentence.
 - If the source metadata is thin, write a narrower post instead of filling gaps.
 - Do not turn one news item into a broad industry conclusion unless the source metadata supports it.
+- The post should feel skimmable on mobile.
+- The middle should give the reader 2 to 3 concrete lenses, not just generic commentary.
 """.strip()
 
 
