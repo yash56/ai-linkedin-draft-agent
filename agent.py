@@ -257,8 +257,9 @@ def is_factual_claim(claim: str) -> bool:
         return False
 
     claim_patterns = [
-        r"\b(announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes|confirmed|cited|runs on|powered by)\b",
+        r"\b(announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes|confirmed|cited|runs on|powered by|used|leveraged|accelerated|reached|achieved|delivered|proved)\b",
         r"\b\d+[\w%$]*\b",
+        r"\b(zero|near-total|complete|major|mission-critical|without sacrificing|technical debt|hard deadline|ultimate hard deadline|recipe for)\b",
         r"\b(according to|source summary|published this|rss item)\b",
     ]
     return any(re.search(pattern, lowered) for pattern in claim_patterns)
@@ -513,7 +514,7 @@ def write_draft(item: NewsItem, style: str, gemini_api_key: str, gemini_model: s
 def write_template_draft(item: NewsItem, style: str) -> Draft:
     date_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
     summary_sentence = (
-        f"The source summary says: {item.summary}"
+        f"What happened: {item.summary}"
         if item.summary
         else "The RSS item did not include a usable summary, so this draft sticks to the title and source link."
     )
@@ -529,76 +530,67 @@ def write_template_draft(item: NewsItem, style: str) -> Draft:
 
     body_templates = {
         "Product teardown": (
-            f"{item.source_name} published this on {date_text}.\n\n"
+            f"Here is the simple version: {item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "The PM read is simple: look past the announcement and inspect the user workflow.\n\n"
-            "What changes for the user? What gets easier? What still needs proof?\n\n"
-            "The interesting part is not whether the headline sounds important. Most AI headlines do.\n\n"
-            "The interesting part is whether a user, team, or buyer has a clearer reason to change behavior after reading it.\n\n"
-            "That is the difference between product momentum and another well-lit announcement.\n\n"
-            "A product story is only useful if the value is specific enough to survive outside the launch post."
+            "For PMs, the useful read is not the headline. It is the user problem underneath it.\n\n"
+            "A good teardown asks three basic questions:\n"
+            "1. What user workflow is affected?\n"
+            "2. What decision becomes easier?\n"
+            "3. What proof is still missing?\n\n"
+            "That keeps the analysis practical instead of turning every AI update into a grand theory of the future."
         ),
         "Launch analysis": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "My launch-analysis lens:\n"
-            "1. Is the user problem clear?\n"
-            "2. Is the adoption path obvious?\n"
-            "3. Is the product claim supported by the source, not vibes?\n\n"
-            "That last point matters more in AI than almost anywhere else.\n\n"
-            "The category is already crowded with impressive demos, fuzzy positioning, and features that look useful until they hit a real workflow.\n\n"
-            "A strong launch should make the buyer's next step obvious.\n\n"
-            "Launches are cheap. Changed behavior is expensive."
+            "The launch question is simple: does this make a specific workflow easier, faster, or more trustworthy?\n\n"
+            "If yes, it is worth watching. If not, it is probably another polished announcement in a very crowded AI feed.\n\n"
+            "For product teams, the next step is to look for the adoption path. Who uses this? When do they use it? What job does it replace or improve?\n\n"
+            "That is the difference between a launch people understand and a launch people scroll past."
         ),
         "Founder/investor signal": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "The signal for founders and investors is not the headline itself. It is where attention, distribution, trust, or workflow gravity might shift.\n\n"
-            "In AI, that signal is easy to overread.\n\n"
-            "The safer read is to ask what this changes about the market map. Does it create a new wedge? Does it make an existing product surface more valuable? Does it expose a workflow that still needs better tooling?\n\n"
-            "Those questions are more useful than treating every announcement like a category reset.\n\n"
-            "If this creates a new default behavior, it matters. If it only creates a louder demo, the market will move on by lunch."
+            "For founders and investors, the signal is not the announcement itself. The signal is the user behavior it points toward.\n\n"
+            "Does this show a workflow becoming more important? Does it reveal a gap in tooling? Does it make distribution, trust, or adoption easier for a specific user group?\n\n"
+            "Those are better questions than asking whether the headline sounds big.\n\n"
+            "In AI, the winning insight is often not the model or feature. It is the painful workflow that suddenly becomes visible."
         ),
         "PM lesson": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "PM lesson: do not confuse capability with product value.\n\n"
-            "The useful question is not \"is this impressive?\" It is \"does this remove friction from a real decision, workflow, or habit?\"\n\n"
-            "AI teams get into trouble when they ship capability and assume the use case will politely assemble itself.\n\n"
-            "It rarely does.\n\n"
-            "Users need context, trust, control, and a reason to come back tomorrow. Without that, even strong technology becomes another tab in the browser archaeology layer.\n\n"
-            "That is where AI products either become useful or become another tab nobody asked for."
+            "PM lesson: capability is not the same as product value.\n\n"
+            "The useful question is not \"is this impressive?\"\n\n"
+            "The useful question is: what user decision, workflow, or repeated task becomes easier because of this?\n\n"
+            "That framing makes the post more grounded. It also keeps teams from mistaking technical novelty for customer value.\n\n"
+            "AI products win when the user can quickly understand the job they are supposed to help with."
         ),
         "Slightly sarcastic industry observation": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
-            "The AI industry remains undefeated at making every announcement sound like the beginning of a new era.\n\n"
-            "Sometimes it is. Often it is a feature, a positioning move, or a useful but narrow step forward wearing a keynote outfit.\n\n"
-            "That does not make it unimportant. It just means the PM read needs to be less breathless and more specific.\n\n"
-            "What is actually changing? Who feels the change first? What workflow gets less painful?\n\n"
-            "The PM job is less dramatic: check the source, identify the user impact, and separate actual product movement from well-lit theater."
+            "AI announcements have a habit of sounding like civilization has entered a new chapter before lunch.\n\n"
+            "Sometimes the update is genuinely important. Sometimes it is a useful feature with very enthusiastic lighting.\n\n"
+            "The PM read should be calmer: what changed, who benefits, and what workflow gets easier?\n\n"
+            "If those answers are clear, the news matters. If they are not, the headline probably needs more proof before it becomes a strategy."
         ),
         "What this means for builders breakdown": (
             f"{item.source_name} published this on {date_text}.\n\n"
             f"{summary_sentence}\n\n"
             "What this means for builders:\n"
             "1. Watch the workflow, not just the feature.\n"
-            "2. Look for a repeated user behavior this could unlock.\n"
-            "3. Do not add claims unless the source supports them.\n\n"
-            "The useful builder question is not \"can we clone this?\"\n\n"
-            "It is \"what user pain does this make more visible?\"\n\n"
-            "That is where the better product opportunity usually sits. Not in copying the announcement, but in noticing the friction it points toward.\n\n"
-            "The opportunity is usually hiding in the boring operational detail."
+            "2. Look for the user pain behind the announcement.\n"
+            "3. Ask what becomes simpler for a real team or customer.\n\n"
+            "The builder opportunity is usually not to copy the news item.\n\n"
+            "It is to notice the friction the news item points toward, then build something more focused and useful around it."
         ),
     }
 
     endings = {
-        "Product teardown": "Strong PM takeaway: if the workflow does not change, the launch is mostly noise.",
-        "Launch analysis": "Question I would ask the team: what user behavior should be measurably different after this?",
-        "Founder/investor signal": "My opinion: the durable signal is changed distribution or habit, not a prettier announcement.",
-        "PM lesson": "PM takeaway: capability is table stakes. Adoption is the real product work.",
-        "Slightly sarcastic industry observation": "Strong opinion: the AI market needs fewer victory laps and more proof of changed workflows.",
-        "What this means for builders breakdown": "Builder takeaway: ship toward a behavior, not a buzzword.",
+        "Product teardown": "PM takeaway: a strong AI story should make the user problem clearer, not just the technology sound bigger.",
+        "Launch analysis": "Question for product teams: what would a user do differently after this update?",
+        "Founder/investor signal": "Founder takeaway: follow the workflow pain, not the loudest headline.",
+        "PM lesson": "PM takeaway: if the user cannot understand the value quickly, the product story is not ready.",
+        "Slightly sarcastic industry observation": "Strong opinion: the best AI posts explain the user impact before they try to sound visionary.",
+        "What this means for builders breakdown": "Builder takeaway: useful products usually start with a boring workflow that someone desperately wants fixed.",
     }
 
     fact_notes = [
@@ -704,11 +696,19 @@ Hard rules:
 - Avoid corporate fluff.
 - Avoid generic AI hype.
 - Voice: sharp Product Manager who tracks AI deeply.
-- Length: aim for 220 to 380 words total across hook, body, and ending.
-- Write like a ready-to-post LinkedIn draft, not an audit report.
+- Length: aim for 180 to 300 words total across hook, body, and ending.
+- Write like a ready-to-post LinkedIn draft for PMs, founders, and AI builders.
+- The reader should understand the post even if they have not read the article.
+- Start with clear context, not a clever insider take.
+- Explain what happened in plain English using only the source metadata.
+- Explain why it matters for product teams, builders, or AI adoption.
+- End with one concrete PM takeaway or question.
+- Prefer clarity over sarcasm. Use slight sarcasm only when it helps understanding.
+- Avoid vague phrases like structural shift, fundamental shift, changed behavior, default behavior, market has made its choice, AI is just a toy, or officially over unless the source directly supports that claim.
+- Avoid dramatic claims about velocity, quality, enterprise adoption, deadlines, customer impact, defects, benchmarks, or market demand unless those exact facts appear in the source metadata.
 - Do not include labels like Hook, Body, Suggested ending, Sources, Fact-check notes, or Risk flags in the draft text.
 - Do not mention fact-checking inside the LinkedIn post.
-- You may use punchy section lines inside the post only when they improve readability.
+- You may use simple LinkedIn-style section labels only if they help the reader, such as: What happened, Why it matters, PM takeaway.
 - Required style for this draft: {style}
 - The style must be one of: Product teardown, Launch analysis, Founder/investor signal, PM lesson, Slightly sarcastic industry observation, What this means for builders breakdown.
 - End with a strong opinion, question, or PM takeaway.
@@ -725,10 +725,15 @@ URL: {item.url}
 RSS summary: {summary}
 
 Write:
-1. hook: 1 to 2 sharp opening lines.
-2. body: 6 to 10 short paragraphs, or a concise numbered/list-style breakdown, with PM analysis grounded only in the source metadata.
-3. ending: 1 strong opinion, question, or PM takeaway.
+1. hook: 1 to 2 clear opening lines that state the topic and why a PM should care.
+2. body: 5 to 8 short paragraphs. Use this flow: context, what happened, why it matters, PM/builder implication, practical takeaway.
+3. ending: 1 specific opinion, question, or PM takeaway that follows from the source.
 4. fact_check_notes: internal notes only. These are not shown in Slack.
+
+Quality bar:
+- A non-technical reader should be able to summarize the point in one sentence.
+- If the source metadata is thin, write a narrower post instead of filling gaps.
+- Do not turn one news item into a broad industry conclusion unless the source metadata supports it.
 """.strip()
 
 
