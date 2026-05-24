@@ -32,6 +32,15 @@ rss_feeds:
   - https://techcrunch.com/category/artificial-intelligence/feed/
   - https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
 
+x_queries:
+  - AI agents
+  - Gemini Omni
+  - Google Gemini
+  - ChatGPT
+  - Claude AI
+  - coding agents
+  - AI product management
+
 sources:
   - name: OpenAI News
     url: https://openai.com/news/rss.xml
