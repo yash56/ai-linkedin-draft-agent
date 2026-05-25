@@ -23,13 +23,13 @@ Slack Sender
 ## Guardrails
 
 - Uses only RSS items with a clear title, source, URL, and published date.
-- Keeps the freshness window between 24 and 48 hours.
+- Keeps the freshness window between 24 and 48 hours, with the daily workflow set to 36 hours for fresher topics.
 - Prefers official sources, then credible tech and product sources.
 - Filters for configured topics such as AI agents, Gemini, ChatGPT, Claude, Product Management, launches, and coding agents.
 - Gives configured trusted sources extra ranking weight.
 - Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
 - Optionally reads recent X posts when `X_BEARER_TOKEN` is configured, but only as trend context for angle selection.
-- Writes like a sharp Product Manager who tracks AI deeply, using one of six rotating styles.
+- Writes like a sharp Product Manager who tracks AI deeply, using narrative post archetypes inspired by role shifts, failure breakdowns, builder playbooks, launch lessons, and uncomfortable PM truths.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Sends clean LinkedIn-ready drafts to Slack with source links only.
@@ -49,16 +49,16 @@ Anthropic is listed as a trusted source and topic, but its requested RSS URL is 
 
 ## Writing styles
 
-Each generated post uses one of these styles:
+Each generated post uses one of these archetypes:
 
-- Product teardown
-- Launch analysis
-- Founder/investor signal
-- PM lesson
-- Slightly sarcastic industry observation
-- What this means for builders breakdown
+- Role shift narrative
+- Why this fails breakdown
+- Builder playbook
+- Launch lesson
+- Uncomfortable PM truth
+- Trend-to-takeaway essay
 
-The prompt requires short paragraphs, no corporate fluff, no unsupported claims, and an ending with a strong opinion, question, or PM takeaway.
+The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels, no corporate fluff, no unsupported claims, a strong ending, and relevant hashtags.
 
 ## Fact-check pass
 
