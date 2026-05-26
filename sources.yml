@@ -24,6 +24,9 @@ trusted_sources:
   - Lenny's Newsletter
   - Product Coalition
   - Mind the Product
+  - Hugging Face
+  - GitHub Blog
+  - InfoQ
 
 rss_feeds:
   - https://blog.google/technology/ai/rss/
@@ -87,6 +90,22 @@ sources:
   - name: VentureBeat AI
     url: https://venturebeat.com/category/ai/feed/
     category: ai
+    credibility: credible
+  - name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+    category: ai
+    credibility: official
+  - name: GitHub AI Blog
+    url: https://github.blog/ai-and-ml/feed/
+    category: ai
+    credibility: official
+  - name: InfoQ AI ML Data Engineering
+    url: https://feed.infoq.com/ai-ml-data-eng
+    category: ai
+    credibility: credible
+  - name: Mind the Product
+    url: https://www.mindtheproduct.com/feed/
+    category: product-management
     credibility: credible
   - name: Product Talk
     url: https://www.producttalk.org/feed/
