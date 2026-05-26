@@ -30,5 +30,6 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           GEMINI_MODEL: gemini-3-flash-preview
           FRESH_HOURS: "36"
+          ALLOW_TEMPLATE_FALLBACK: "false"
           LOG_LEVEL: INFO
         run: python agent.py

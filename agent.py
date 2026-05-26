@@ -30,7 +30,7 @@ MIN_DRAFTS = 2
 MAX_DRAFTS = 3
 MAX_X_TRENDS = 8
 REQUEST_TIMEOUT_SECONDS = 20
-USER_AGENT = "ai-linkedin-draft-agent/0.3 (+source-backed LinkedIn drafts)"
+USER_AGENT = "ai-linkedin-draft-agent/0.5 (+source-backed LinkedIn drafts)"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 X_RECENT_SEARCH_URL = "https://api.x.com/2/tweets/search/recent"
 DEFAULT_HASHTAGS = (
@@ -64,6 +64,7 @@ class NewsItem:
     category: str
     credibility: str
     summary: str
+    source_excerpt: str = ""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -198,6 +199,7 @@ def source_pack_text(item: NewsItem) -> str:
             item.category,
             item.credibility,
             item.summary,
+            item.source_excerpt,
         ]
     ).lower()
 
@@ -206,10 +208,13 @@ def is_factual_claim(claim: str) -> bool:
     lowered = claim.lower()
     if any(marker in lowered for marker in ["pm takeaway", "strong opinion", "question for", "my read"]):
         return False
+    if re.search(r"\b(should|could|might|may|usually|often|look for|ask what|watch for|the useful question)\b", lowered):
+        if not re.search(r"\b\d+[\w%$]*\b", lowered):
+            return False
     patterns = [
         r"\b(announced|launched|released|published|reported|named|recognized|introduced|created|built|supports|enables|uses|includes|confirmed|cited|runs on|powered by|testing|rolling out|available|preview|beta|demo|promises|designed to|deepfaking|trial|successfully)\b",
         r"\b\d+[\w%$]*\b",
-        r"\b(zero|near-total|complete|major|mission-critical|technical debt|hard deadline|anything-to-anything|object retention|synthetic media|professional-grade|high-quality|highest-paying)\b",
+        r"\b(zero|near-total|complete|mission-critical|anything-to-anything|object retention|synthetic media|professional-grade|highest-paying)\b",
     ]
     return any(re.search(pattern, lowered) for pattern in patterns)
 
@@ -250,15 +255,9 @@ def fact_check_draft(draft: Draft) -> Draft:
     flags = title_flags + body_flags
 
     if not title:
-        title = "The Product Question Behind This"
-        flags.append("Title replaced after unsupported claims were removed.")
+        raise AgentError("Fact-check removed the title because it was not source-supported.")
     if not body:
-        body = (
-            f"{draft.topic.source_name} published this on "
-            f"{draft.topic.published_at.strftime('%Y-%m-%d %H:%M UTC')}.\n\n"
-            "The generated body contained weak factual claims, so the draft was reduced to verified source metadata."
-        )
-        flags.append("Body replaced after unsupported claims were removed.")
+        raise AgentError("Fact-check removed the body because it was not source-supported.")
 
     notes = list(draft.fact_check_notes)
     if flags:
@@ -267,7 +266,7 @@ def fact_check_draft(draft: Draft) -> Draft:
     else:
         notes.append("Automated claim audit found no weak factual claims.")
 
-    return Draft(
+    checked = Draft(
         topic=draft.topic,
         title=sanitize_generated_text(title),
         body=sanitize_generated_text(ensure_hashtags(body)),
@@ -275,6 +274,7 @@ def fact_check_draft(draft: Draft) -> Draft:
         fact_check_notes=dedupe_text(notes),
         risk_flags=dedupe_text(flags),
     )
+    return validate_draft_quality(checked)
 
 
 def fetch_feed(source: NewsSource) -> list[dict[str, Any]]:
@@ -328,6 +328,34 @@ def collect_news(config: AgentConfig, fresh_hours: int, now: dt.datetime) -> lis
     return dedupe_items(items)
 
 
+def fetch_article_context(url: str) -> str:
+    try:
+        response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        LOGGER.warning("Could not fetch article context for %s: %s", url, exc)
+        return ""
+
+    html_text = response.text
+    meta_values = re.findall(
+        r'<meta[^>]+(?:name|property)=["\'](?:description|og:description|twitter:description)["\'][^>]+content=["\']([^"\']+)["\']',
+        html_text,
+        flags=re.I,
+    )
+    paragraphs = re.findall(r"<p[^>]*>(.*?)</p>", html_text, flags=re.I | re.S)
+    paragraph_text = " ".join(clean_text(paragraph, max_length=500) for paragraph in paragraphs[:8])
+    context = " ".join(meta_values + [paragraph_text])
+    return clean_text(context, max_length=1600)
+
+
+def enrich_items_with_article_context(items: list[NewsItem]) -> list[NewsItem]:
+    enriched: list[NewsItem] = []
+    for item in items:
+        excerpt = fetch_article_context(item.url)
+        enriched.append(dataclasses.replace(item, source_excerpt=excerpt))
+    return enriched
+
+
 def matches_topics(item: NewsItem, topics: list[str]) -> bool:
     if not topics:
         return True
@@ -342,9 +370,18 @@ def dedupe_items(items: list[NewsItem]) -> list[NewsItem]:
         key = re.sub(r"[?#].*$", "", item.url.lower()).rstrip("/") or item.title.lower()
         if key in seen:
             continue
+        item_tokens = meaningful_tokens(item.title)
+        if any(jaccard(item_tokens, meaningful_tokens(existing.title)) > 0.72 for existing in deduped):
+            continue
         seen.add(key)
         deduped.append(item)
     return deduped
+
+
+def jaccard(first: set[str], second: set[str]) -> float:
+    if not first or not second:
+        return 0
+    return len(first.intersection(second)) / len(first.union(second))
 
 
 def collect_x_trends(config: AgentConfig) -> list[TrendSignal]:
@@ -408,14 +445,40 @@ def score_item(item: NewsItem, now: dt.datetime, config: AgentConfig, trends: li
     credibility_bonus = {"official": 40, "primary": 35, "credible": 20, "news": 15}.get(item.credibility, 10)
     trusted_bonus = 10 if any(source.lower() in item.source_name.lower() for source in config.trusted_sources) else 0
     category_bonus = 8 if item.category in {"ai", "product", "product-management"} else 0
-    topic_bonus = min(sum(topic.lower() in f"{item.title} {item.summary}".lower() for topic in config.topics) * 4, 16)
+    searchable = f"{item.title} {item.summary} {item.source_excerpt}".lower()
+    topic_bonus = min(sum(topic.lower() in searchable for topic in config.topics) * 4, 16)
+    actionability_bonus = 18 if re.search(
+        r"\b(agent|model|launch|developer|coding|product|api|builder|enterprise|workflow|eval|evaluation|gemini|claude|chatgpt|openai)\b",
+        searchable,
+    ) else 0
+    low_signal_penalty = -28 if re.search(
+        r"\b(partner|partnership|journalism|media deal|award|recognized|named a leader|magic quadrant)\b",
+        searchable,
+    ) else 0
     freshness_bonus = max(0, 48 - age_hours)
-    return credibility_bonus + trusted_bonus + category_bonus + topic_bonus + freshness_bonus + trend_bonus(item, trends)
+    return (
+        credibility_bonus
+        + trusted_bonus
+        + category_bonus
+        + topic_bonus
+        + actionability_bonus
+        + low_signal_penalty
+        + freshness_bonus
+        + trend_bonus(item, trends)
+    )
 
 
 def rank_items(items: list[NewsItem], now: dt.datetime, config: AgentConfig, trends: list[TrendSignal]) -> list[NewsItem]:
     ranked = sorted(items, key=lambda item: (score_item(item, now, config, trends), item.published_at), reverse=True)
-    return ranked[:MAX_DRAFTS]
+    diverse: list[NewsItem] = []
+    for item in ranked:
+        item_tokens = meaningful_tokens(f"{item.title} {item.summary}")
+        if any(jaccard(item_tokens, meaningful_tokens(f"{existing.title} {existing.summary}")) > 0.58 for existing in diverse):
+            continue
+        diverse.append(item)
+        if len(diverse) == MAX_DRAFTS:
+            break
+    return diverse
 
 
 def trend_context_for_item(item: NewsItem, trends: list[TrendSignal]) -> str:
@@ -435,24 +498,33 @@ def trend_context_for_item(item: NewsItem, trends: list[TrendSignal]) -> str:
 
 def style_for_day(now: dt.datetime) -> str:
     styles = [
-        "Role shift narrative",
-        "Why this fails breakdown",
-        "Builder playbook",
-        "Launch lesson",
-        "Uncomfortable PM truth",
-        "Trend-to-takeaway essay",
+        "Product teardown",
+        "Launch analysis",
+        "Founder/investor signal",
+        "PM lesson",
+        "Slightly sarcastic industry observation",
+        "What this means for builders breakdown",
     ]
     random.seed(now.strftime("%Y-%m-%d"))
     return random.choice(styles)
 
 
 def write_draft(item: NewsItem, style: str, api_key: str, model: str, trend_context: str) -> Draft:
+    if not api_key:
+        if os.getenv("ALLOW_TEMPLATE_FALLBACK", "").lower() == "true":
+            return polish_draft(write_template_draft(item))
+        raise AgentError("GEMINI_API_KEY is required for publishable LinkedIn drafts.")
+
     if api_key:
         try:
             return polish_draft(write_gemini_draft(item, style, api_key, model, trend_context))
         except AgentError as exc:
-            LOGGER.warning("Gemini draft failed for %s. Falling back to template: %s", item.title, exc)
-    return polish_draft(write_template_draft(item))
+            if os.getenv("ALLOW_TEMPLATE_FALLBACK", "").lower() == "true":
+                LOGGER.warning("Gemini draft failed for %s. Falling back to template: %s", item.title, exc)
+                return polish_draft(write_template_draft(item))
+            raise AgentError(f"Gemini draft failed for {item.title}: {exc}") from exc
+
+    raise AgentError("Draft generation failed.")
 
 
 def write_gemini_draft(item: NewsItem, style: str, api_key: str, model: str, trend_context: str) -> Draft:
@@ -497,11 +569,14 @@ def build_gemini_prompt(item: NewsItem, style: str, trend_context: str) -> str:
 You are writing one LinkedIn post like a sharp Product Manager who tracks AI deeply.
 
 Target style:
-- Similar quality to posts titled "The Shift to the AI PM" or "Why AI Agents Actually Fail".
-- A short title, then a punchy opening that contrasts what people assume with what is actually changing.
-- Short, human paragraphs.
-- 3 to 4 practical sections with a small emoji plus a crisp label, for example Building, Testing, Data Quality, Evaluation Gaps.
-- A strong ending that leaves the reader with a useful PM takeaway.
+- Write like a sharp Product Manager who tracks AI deeply.
+- Similar structure and clarity to posts titled "The Shift to the AI PM" or "Why AI Agents Actually Fail".
+- A short memorable title, not a report headline.
+- A punchy opening that creates tension, for example "Everyone is looking at X. The real shift is Y."
+- Short, human paragraphs with plain language.
+- 3 to 4 useful sections with a small emoji plus a crisp label, for example Building, Testing, Data Quality, Evaluation Gaps.
+- Each section must teach the reader something practical, not repeat the source summary.
+- A strong ending with a clear opinion, question, or PM takeaway.
 - Relevant hashtags at the end.
 
 Hard rules:
@@ -519,6 +594,9 @@ Hard rules:
 - Length: 260 to 430 words.
 - Write for PMs, founders, and AI builders, but make it understandable for smart non-experts.
 - Do not start with the source name, report title, company name, or publication date.
+- Do not write "The headline is interesting" or "The product question underneath it is more useful".
+- Do not write a generic announcement recap.
+- Do not make the same point twice.
 - If the source metadata is thin, make the sections practical PM lenses instead of fake specifics.
 - End with 8 to 12 relevant hashtags.
 - Output valid JSON only with keys: title, body, fact_check_notes.
@@ -533,6 +611,8 @@ Category: {item.category}
 Credibility: {item.credibility}
 URL: {item.url}
 RSS summary: {summary}
+Article excerpt:
+{item.source_excerpt or "No article excerpt was available."}
 
 Optional X trend context:
 {trend_context}
@@ -579,18 +659,8 @@ def write_template_draft(item: NewsItem) -> Draft:
 def polish_draft(draft: Draft) -> Draft:
     title = draft.title.strip()
     if len(re.findall(r"\b\w+\b", title)) > 12:
-        title = "The Product Question Behind This"
+        title = "What Builders Should Notice"
     body = draft.body
-    if not re.search(r"(?m)^[^\n]{0,4}(Building|Testing|Data Quality|Evaluation|PM Taste|What builders)", body, re.I):
-        body = (
-            f"{body.strip()}\n\n"
-            "\U0001F5A5\ufe0f Building\n"
-            "What user workflow changes?\n\n"
-            "\U0001F9EA Testing\n"
-            "What proof would make this trustworthy?\n\n"
-            "\U0001F9ED PM Taste\n"
-            "What would a real user do differently?"
-        )
     return Draft(
         topic=draft.topic,
         title=sanitize_generated_text(title),
@@ -599,6 +669,39 @@ def polish_draft(draft: Draft) -> Draft:
         fact_check_notes=draft.fact_check_notes,
         risk_flags=draft.risk_flags,
     )
+
+
+def validate_draft_quality(draft: Draft) -> Draft:
+    body = draft.body.strip()
+    title = draft.title.strip()
+    word_count = len(re.findall(r"\b[\w']+\b", body))
+    section_count = len(re.findall(r"(?m)^[^\n]{0,6}[A-Z][A-Za-z /&-]{2,40}$", body))
+    section_count += len(re.findall(r"(?m)^[^\n]{0,4}[\U0001F300-\U0001FAFF]\ufe0f?\s*[A-Z][^\n]{2,45}$", body))
+    low_quality_patterns = [
+        r"the headline is interesting",
+        r"the product question underneath",
+        r"verify the linked source",
+        r"no usable rss summary",
+        r"published this on \d{4}-\d{2}-\d{2}",
+        r"what user workflow changes\?",
+        r"what proof would make this trustworthy\?",
+        r"what would a real user do differently\?",
+    ]
+    if word_count < 220:
+        raise AgentError(f"Draft quality gate failed: body is too short ({word_count} words).")
+    if word_count > 520:
+        raise AgentError(f"Draft quality gate failed: body is too long ({word_count} words).")
+    if section_count < 2:
+        raise AgentError("Draft quality gate failed: missing useful section labels.")
+    if any(re.search(pattern, f"{title}\n{body}", re.I) for pattern in low_quality_patterns):
+        raise AgentError("Draft quality gate failed: generic fallback language detected.")
+    return draft
+
+
+def drafts_are_too_similar(first: Draft, second: Draft) -> bool:
+    first_tokens = meaningful_tokens(f"{first.title} {first.body}")
+    second_tokens = meaningful_tokens(f"{second.title} {second.body}")
+    return jaccard(first_tokens, second_tokens) > 0.42
 
 
 def ensure_hashtags(text: str) -> str:
@@ -693,6 +796,7 @@ def run() -> int:
     items = collect_news(config, args.fresh_hours, now)
     LOGGER.info("Collected %s qualifying fresh item(s).", len(items))
     trends = collect_x_trends(config)
+    items = enrich_items_with_article_context(items)
     selected = rank_items(items, now, config, trends)
     if len(selected) < MIN_DRAFTS:
         LOGGER.warning("Only %s qualifying item(s) found. The agent will not invent filler topics.", len(selected))
@@ -701,12 +805,23 @@ def run() -> int:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
     LOGGER.info("Draft style for today: %s", style)
-    LOGGER.info("Draft model: %s", model if api_key else "template fallback")
+    LOGGER.info("Draft model: %s", model if api_key else "Gemini key missing, fallback disabled unless explicitly enabled")
 
-    drafts = [
-        fact_check_draft(write_draft(item, style, api_key, model, trend_context_for_item(item, trends)))
-        for item in selected
-    ]
+    drafts: list[Draft] = []
+    for item in selected:
+        try:
+            draft = fact_check_draft(write_draft(item, style, api_key, model, trend_context_for_item(item, trends)))
+            if any(drafts_are_too_similar(draft, existing) for existing in drafts):
+                raise AgentError("Draft quality gate failed: too similar to another selected draft.")
+            drafts.append(draft)
+        except AgentError as exc:
+            LOGGER.error("Skipping draft for %s: %s", item.title, exc)
+
+    if len(drafts) < MIN_DRAFTS:
+        raise AgentError(
+            f"Only {len(drafts)} publishable draft(s) were generated. Refusing to send generic fallback content."
+        )
+
     message = build_slack_message(drafts, now)
 
     if args.dry_run:
