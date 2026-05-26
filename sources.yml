@@ -26,6 +26,8 @@ trusted_sources:
   - Mind the Product
   - Hugging Face
   - GitHub Blog
+  - Google Developers Blog
+  - AWS Machine Learning Blog
   - InfoQ
 
 rss_feeds:
@@ -58,6 +60,10 @@ sources:
     credibility: official
   - name: Google AI Blog
     url: https://blog.google/technology/ai/rss/
+    category: ai
+    credibility: official
+  - name: Google Developers Blog
+    url: https://developers.googleblog.com/feed/
     category: ai
     credibility: official
   # This user-requested Anthropic RSS URL returned 404 during verification.
@@ -97,6 +103,10 @@ sources:
     credibility: official
   - name: GitHub AI Blog
     url: https://github.blog/ai-and-ml/feed/
+    category: ai
+    credibility: official
+  - name: AWS Machine Learning Blog
+    url: https://aws.amazon.com/blogs/machine-learning/feed/
     category: ai
     credibility: official
   - name: InfoQ AI ML Data Engineering
