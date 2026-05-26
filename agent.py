@@ -579,6 +579,21 @@ Target style:
 - A strong ending with a clear opinion, question, or PM takeaway.
 - Relevant hashtags at the end.
 
+Daily LinkedIn recipe:
+1. Title: 3 to 8 words, specific and curiosity-building.
+2. Opening: 2 to 4 short lines that make the reader understand the tension immediately.
+3. Context: 1 concise paragraph explaining the verified source-backed news in plain language.
+4. Sections: 3 to 4 labeled sections. Each section should be 2 to 4 lines and explain a useful PM, builder, market, workflow, or risk insight.
+5. Ending: one strong opinion, question, or takeaway that feels worth commenting on.
+6. Sources stay outside the post body and will be appended by the Slack formatter.
+
+Good hook shapes:
+- "Everyone is watching [obvious thing]. The real shift is [deeper workflow or market change]."
+- "[Company] did not just [surface-level news]. It exposed [product/market/security lesson]."
+- "The interesting part is not [announcement]. The interesting part is what it changes for [builders/users/PMs]."
+
+Do not copy these hook shapes literally every time. Use them as quality references.
+
 Hard rules:
 - Use only the source metadata below for facts.
 - Every factual claim must be traceable to the source metadata.
@@ -596,6 +611,7 @@ Hard rules:
 - Do not start with the source name, report title, company name, or publication date.
 - Do not write "The headline is interesting" or "The product question underneath it is more useful".
 - Do not write a generic announcement recap.
+- Do not include headings like Hook, LinkedIn post body, Suggested ending, Fact-check notes, Risk flags, or Sources inside the body.
 - Do not make the same point twice.
 - If the source metadata is thin, make the sections practical PM lenses instead of fake specifics.
 - End with 8 to 12 relevant hashtags.
@@ -678,6 +694,12 @@ def validate_draft_quality(draft: Draft) -> Draft:
     section_count = len(re.findall(r"(?m)^[^\n]{0,6}[A-Z][A-Za-z /&-]{2,40}$", body))
     section_count += len(re.findall(r"(?m)^[^\n]{0,4}[\U0001F300-\U0001FAFF]\ufe0f?\s*[A-Z][^\n]{2,45}$", body))
     low_quality_patterns = [
+        r"^hook\s*:",
+        r"^linkedin post body\s*:",
+        r"^suggested ending\s*:",
+        r"^fact-check notes\s*:",
+        r"^risk flags\s*:",
+        r"^sources\s*:",
         r"the headline is interesting",
         r"the product question underneath",
         r"verify the linked source",
