@@ -31,6 +31,8 @@ Slack Sender
 - Optionally reads recent X posts when `X_BEARER_TOKEN` is configured, but only as trend context for angle selection.
 - Writes like a sharp Product Manager who tracks AI deeply, using narrative post archetypes inspired by role shifts, failure breakdowns, builder playbooks, launch lessons, and uncomfortable PM truths.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
+- Fetches article excerpts for selected items so Gemini has richer source context than RSS metadata alone.
+- Refuses to send generic fallback drafts unless `ALLOW_TEMPLATE_FALLBACK=true` is explicitly set.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Sends clean LinkedIn-ready drafts to Slack with source links only.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
@@ -62,7 +64,7 @@ The prompt requires a short title, a punchy opening contrast, practical sections
 
 ## Fact-check pass
 
-Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, and RSS summary.
+Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, RSS summary, and fetched article excerpt.
 
 If a factual-looking claim is not supported by that source pack, the agent removes or rewrites it conservatively. Risk flags remain internal logs and are not shown in the Slack draft output.
 
@@ -109,4 +111,4 @@ X_BEARER_TOKEN
 
 ## Notes
 
-Gemini receives only the verified RSS metadata for each selected item: title, source, published date, URL, category, credibility, and summary. Optional X trend context is used only to shape the angle, not to add facts. If `GEMINI_API_KEY` is missing or the Gemini call fails, the agent falls back to deterministic source-backed templates.
+Gemini receives verified source metadata plus a fetched article excerpt for each selected item. Optional X trend context is used only to shape the angle, not to add facts. If Gemini cannot produce enough publishable drafts, the agent fails instead of sending generic filler.
