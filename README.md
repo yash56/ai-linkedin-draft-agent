@@ -31,6 +31,7 @@ Slack Sender
 - Optionally reads recent X posts when `X_BEARER_TOKEN` is configured, but only as trend context for angle selection.
 - Writes like a sharp Product Manager who tracks AI deeply, using narrative post archetypes inspired by role shifts, failure breakdowns, builder playbooks, launch lessons, and uncomfortable PM truths.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
+- Rejects drafts that are too short, too generic, missing useful sections, or too similar to another draft.
 - Fetches article excerpts for selected items so Gemini has richer source context than RSS metadata alone.
 - Refuses to send generic fallback drafts unless `ALLOW_TEMPLATE_FALLBACK=true` is explicitly set.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
@@ -51,14 +52,14 @@ Anthropic is listed as a trusted source and topic, but its requested RSS URL is 
 
 ## Writing styles
 
-Each generated post uses one of these archetypes:
+Each generated post uses one of these styles:
 
-- Role shift narrative
-- Why this fails breakdown
-- Builder playbook
-- Launch lesson
-- Uncomfortable PM truth
-- Trend-to-takeaway essay
+- Product teardown
+- Launch analysis
+- Founder/investor signal
+- PM lesson
+- Slightly sarcastic industry observation
+- What this means for builders breakdown
 
 The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels, no corporate fluff, no unsupported claims, a strong ending, and relevant hashtags.
 
@@ -66,7 +67,7 @@ The prompt requires a short title, a punchy opening contrast, practical sections
 
 Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, RSS summary, and fetched article excerpt.
 
-If a factual-looking claim is not supported by that source pack, the agent removes or rewrites it conservatively. Risk flags remain internal logs and are not shown in the Slack draft output.
+If a factual-looking claim is not supported by that source pack, the agent removes it conservatively. If the result becomes thin, generic, or duplicate-looking, the agent rejects the draft instead of sending it to Slack. Risk flags remain internal logs and are not shown in the Slack draft output.
 
 ## Setup
 
