@@ -63,6 +63,15 @@ Each generated post uses one of these styles:
 
 The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels, no corporate fluff, no unsupported claims, a strong ending, and relevant hashtags.
 
+Daily posts follow this LinkedIn-ready recipe:
+
+- A specific 3 to 8 word title.
+- A short hook that makes the tension clear immediately.
+- One plain-language source-backed context paragraph.
+- 3 to 4 practical sections for PMs, founders, AI builders, or operators.
+- A strong opinion, question, or PM takeaway at the end.
+- Hashtags inside the post body, with source links appended separately in Slack.
+
 ## Fact-check pass
 
 Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, RSS summary, and fetched article excerpt.
