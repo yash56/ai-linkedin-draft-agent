@@ -28,6 +28,7 @@ DEFAULT_FRESH_HOURS = 36
 DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 MIN_DRAFTS = 2
 MAX_DRAFTS = 3
+MAX_CANDIDATE_ITEMS = 8
 MAX_X_TRENDS = 8
 REQUEST_TIMEOUT_SECONDS = 20
 USER_AGENT = "ai-linkedin-draft-agent/0.5 (+source-backed LinkedIn drafts)"
@@ -476,7 +477,7 @@ def rank_items(items: list[NewsItem], now: dt.datetime, config: AgentConfig, tre
         if any(jaccard(item_tokens, meaningful_tokens(f"{existing.title} {existing.summary}")) > 0.58 for existing in diverse):
             continue
         diverse.append(item)
-        if len(diverse) == MAX_DRAFTS:
+        if len(diverse) == MAX_CANDIDATE_ITEMS:
             break
     return diverse
 
@@ -798,6 +799,22 @@ def send_to_slack(message: str, webhook_url: str) -> None:
         raise AgentError(f"Slack webhook send failed: {exc}") from exc
 
 
+def send_failure_alert_to_slack(error: Exception) -> None:
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        return
+    message = (
+        "Daily AI + PM LinkedIn Drafts\n\n"
+        "The agent ran, but it could not produce enough publishable LinkedIn drafts today.\n\n"
+        f"Reason: {clean_text(str(error), max_length=900)}\n\n"
+        "No generic fallback posts were sent. Please check the GitHub Actions run logs."
+    )
+    try:
+        send_to_slack(message, webhook_url)
+    except AgentError:
+        LOGGER.exception("Could not send Slack failure alert.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate source-backed LinkedIn drafts from fresh news.")
     parser.add_argument("--sources", default=DEFAULT_SOURCE_FILE, help="Path to sources.yml.")
@@ -836,6 +853,8 @@ def run() -> int:
             if any(drafts_are_too_similar(draft, existing) for existing in drafts):
                 raise AgentError("Draft quality gate failed: too similar to another selected draft.")
             drafts.append(draft)
+            if len(drafts) == MAX_DRAFTS:
+                break
         except AgentError as exc:
             LOGGER.error("Skipping draft for %s: %s", item.title, exc)
 
@@ -863,6 +882,7 @@ def main() -> None:
         raise SystemExit(run())
     except AgentError as exc:
         LOGGER.error("%s", exc)
+        send_failure_alert_to_slack(exc)
         raise SystemExit(1)
     except Exception:
         LOGGER.exception("Unexpected failure.")

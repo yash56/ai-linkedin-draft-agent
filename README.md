@@ -32,8 +32,10 @@ Slack Sender
 - Writes like a sharp Product Manager who tracks AI deeply, using narrative post archetypes inspired by role shifts, failure breakdowns, builder playbooks, launch lessons, and uncomfortable PM truths.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
 - Rejects drafts that are too short, too generic, missing useful sections, or too similar to another draft.
+- Ranks a larger candidate pool so one weak article does not block the whole daily run.
 - Fetches article excerpts for selected items so Gemini has richer source context than RSS metadata alone.
 - Refuses to send generic fallback drafts unless `ALLOW_TEMPLATE_FALLBACK=true` is explicitly set.
+- Sends a Slack failure alert instead of failing silently when it cannot produce enough publishable drafts.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Sends clean LinkedIn-ready drafts to Slack with source links only.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
