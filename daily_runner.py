@@ -4,40 +4,100 @@ from __future__ import annotations
 
 import os
 import re
+import zlib
 
 import agent
 
 
+BACKUP_POST_SHAPES = [
+    {
+        "hook": (
+            "Everyone will skim this as another AI update.\n"
+            "PMs should read it as a workflow signal."
+        ),
+        "sections": [
+            ("What changed", "Treat this as a signal about the product workflow, not a press release to admire from a distance.", "Map it to a real user moment before calling it strategically important."),
+            ("Why PMs should care", "The useful question is which user action becomes easier, safer, faster, or more measurable.", "If that action is fuzzy, the product story is still fuzzy."),
+            ("Reader value", "Turn the news into a checklist before turning it into a roadmap item.", "Ask what proof would make the update worth changing a roadmap, budget, or team process."),
+            ("What builders should watch", "Look for the boring parts: permissions, reliability, evaluation, latency, cost, and failure handling.", "That is usually where AI products become useful, or quietly fall apart."),
+        ],
+        "question": "If you were evaluating this for your product, what would you validate first: user demand, reliability, cost, or workflow fit?",
+    },
+    {
+        "hook": (
+            "The announcement is the easy part.\n"
+            "The harder part is figuring out what it changes for real teams."
+        ),
+        "sections": [
+            ("Product read", "Start with the job-to-be-done, not the model or company name.", "A strong AI update should make one painful step easier to understand or complete."),
+            ("Adoption risk", "Ask where the user still needs trust, control, review, or escalation before this becomes daily behavior.", "The gap between impressive and dependable is where most AI products get humbled."),
+            ("Builder lens", "Separate a useful workflow improvement from a feature that only looks good in a demo.", "Demo value gets attention. Workflow value gets retention."),
+            ("PM takeaway", "The best AI products reduce ambiguity for users instead of adding another shiny surface area.", "If the update creates more decisions than it removes, users will feel the tax immediately."),
+        ],
+        "question": "What would make this genuinely useful in your workflow: better accuracy, clearer controls, faster setup, or stronger proof it works?",
+    },
+    {
+        "hook": (
+            "This is not just a technology update.\n"
+            "It is a small clue about where AI products are getting pulled next."
+        ),
+        "sections": [
+            ("Market signal", "Watch which workflow the news points toward, because that usually reveals the buyer pain.", "The headline matters less than the repeated job underneath it."),
+            ("Execution gap", "The hard work is rarely the announcement. It is deployment, measurement, support, and trust.", "This is where product teams need operating discipline, not just better prompts."),
+            ("PM checklist", "Ask who owns success after launch and what evidence would prove the product is improving.", "Without that loop, the roadmap becomes a pile of AI experiments with nicer branding."),
+            ("Builder takeaway", "Durable AI products make a repeated task easier to complete, not just easier to describe.", "A useful product shift should survive contact with messy users and imperfect data."),
+        ],
+        "question": "Would you treat this as a real product signal, or just another AI headline until users prove otherwise?",
+    },
+    {
+        "hook": (
+            "AI news moves fast enough to make every update sound urgent.\n"
+            "Most of them are not. Some are signals."
+        ),
+        "sections": [
+            ("Signal quality", "A strong signal points to a concrete workflow, user pain, or operating model change.", "If you cannot name the workflow, you probably only have a headline."),
+            ("Noise filter", "Ignore the drama and inspect what can be shipped, measured, trusted, or adopted.", "A little skepticism is healthy. In AI, it is basically product hygiene."),
+            ("Team impact", "The PM question is whether this changes prioritization, onboarding, evaluation, or customer expectations.", "That is where news becomes useful for operators."),
+            ("What to watch", "The next proof point is not the launch language. It is whether users keep coming back.", "Retention beats announcement energy every single time."),
+        ],
+        "question": "What would you need to see before calling this a durable AI product shift?",
+    },
+]
+
+
 def compact_source_title(title: str, max_words: int = 8) -> str:
-    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'&+-]*", agent.clean_text(title, max_length=160))
+    normalized = title.replace("\u2018", "'").replace("\u2019", "'").replace('"', "").replace("'", "")
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'&+-]*", agent.clean_text(normalized, max_length=160))
     if not words:
         return "The AI Builder Signal"
     return " ".join(words[:max_words]).strip(" -,:;") or "The AI Builder Signal"
 
 
+def shape_for_item(item: agent.NewsItem) -> dict[str, object]:
+    index = zlib.crc32(f"{item.url}|{item.title}".encode("utf-8")) % len(BACKUP_POST_SHAPES)
+    return BACKUP_POST_SHAPES[index]
+
+
 def conservative_draft(item: agent.NewsItem) -> agent.Draft:
     summary = item.summary or item.source_excerpt or f"The source item is titled {item.title}."
     title = compact_source_title(item.title)
+    shape = shape_for_item(item)
+    sections = shape["sections"]
+    section_text = "\n\n".join(
+        (
+            f"{label}\n"
+            f"- {point}\n"
+            f"- {follow_up}"
+        )
+        for label, point, follow_up in sections
+    )
     body = (
-        "Everyone will skim this as another AI update.\n"
-        "PMs should read it as a workflow signal.\n\n"
+        f"{shape['hook']}\n\n"
         "The useful question is what it changes for people building, buying, or managing products.\n\n"
         f"Here is the source-backed context: {summary}\n\n"
-        "What changed\n"
-        "- Treat the announcement as a workflow signal, not a press release to admire from a distance.\n"
-        "- Ask which user action becomes easier, faster, safer, or more measurable because of it.\n\n"
-        "Why PMs should care\n"
-        "- AI products are no longer judged only by model capability. They are judged by the job they remove from a real team.\n"
-        "- If the update does not change a decision, handoff, review step, or delivery loop, it is probably less important than the headline suggests.\n\n"
-        "Reader value\n"
-        "- Turn the news into a checklist before turning it into a roadmap item.\n"
-        "- The practical lens is simple: who uses it, what changes, what can fail, and how would the team know it worked?\n\n"
-        "What builders should watch\n"
-        "- Look for the boring parts: permissions, reliability, evaluation, latency, cost, and failure handling.\n"
-        "- Those details usually decide whether an AI feature becomes a daily habit or a demo people forget after lunch.\n\n"
-        "PM takeaway\n"
-        "- The best read is not whether this sounds impressive. It is whether a team can trust it inside an actual workflow.\n\n"
-        "If you were evaluating this for your product, what would you validate first: user demand, reliability, cost, or workflow fit?\n\n"
+        "A practical PM read is simple: do not ask whether the announcement sounds impressive. Ask what behavior it could change, what risk it introduces, and what proof would make a team comfortable using it.\n\n"
+        f"{section_text}\n\n"
+        f"{shape['question']}\n\n"
         f"{agent.DEFAULT_HASHTAGS}"
     )
     return agent.Draft(
@@ -146,6 +206,22 @@ def write_draft(item: agent.NewsItem, style: str, api_key: str, model: str, tren
     return agent.polish_draft(conservative_draft(item))
 
 
+def drafts_are_too_similar(first: agent.Draft, second: agent.Draft) -> bool:
+    if first.topic.url == second.topic.url:
+        return True
+    title_similarity = agent.jaccard(
+        agent.meaningful_tokens(first.topic.title),
+        agent.meaningful_tokens(second.topic.title),
+    )
+    if title_similarity > 0.58:
+        return True
+    body_similarity = agent.jaccard(
+        agent.meaningful_tokens(f"{first.title} {first.body}"),
+        agent.meaningful_tokens(f"{second.title} {second.body}"),
+    )
+    return body_similarity > 0.70
+
+
 def main() -> None:
     os.environ.setdefault("ALLOW_CONSERVATIVE_FALLBACK", "true")
     os.environ["FRESH_HOURS"] = "48"
@@ -153,6 +229,7 @@ def main() -> None:
     agent.build_gemini_prompt = build_gemini_prompt
     agent.write_draft = write_draft
     agent.validate_draft_quality = validate_draft_quality
+    agent.drafts_are_too_similar = drafts_are_too_similar
     agent.main()
 
 
