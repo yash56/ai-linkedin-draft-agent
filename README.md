@@ -23,7 +23,7 @@ Slack Sender
 ## Guardrails
 
 - Uses only RSS items with a clear title, source, URL, and published date.
-- Keeps the freshness window between 24 and 48 hours, with the daily workflow set to 36 hours for fresher topics.
+- Keeps the freshness window between 24 and 48 hours, with the daily workflow allowed to backfill up to 48 hours so it can reliably produce 2 to 3 useful drafts.
 - Prefers official sources, then credible tech and product sources.
 - Filters for configured topics such as AI agents, Gemini, ChatGPT, Claude, Product Management, launches, and coding agents.
 - Gives configured trusted sources extra ranking weight.
@@ -34,8 +34,8 @@ Slack Sender
 - Rejects drafts that are too short, too generic, missing useful sections, or too similar to another draft.
 - Ranks a larger candidate pool so one weak article does not block the whole daily run.
 - Fetches article excerpts for selected items so Gemini has richer source context than RSS metadata alone.
-- Refuses to send generic fallback drafts unless `ALLOW_TEMPLATE_FALLBACK=true` is explicitly set.
-- Sends a Slack failure alert instead of failing silently when it cannot produce enough publishable drafts.
+- Uses `daily_runner.py` to apply the stricter daily writing policy and a conservative source-backed backup writer when Gemini/API issues would otherwise block Slack drafts.
+- Sends a Slack failure alert instead of failing silently if it still cannot produce enough publishable drafts.
 - Generates only 2 to 3 drafts per run when qualifying items are available.
 - Sends clean LinkedIn-ready drafts to Slack with source links only.
 - Avoids invented numbers, timelines, product names, funding amounts, benchmarks, and product claims.
@@ -63,22 +63,22 @@ Each generated post uses one of these styles:
 - Slightly sarcastic industry observation
 - What this means for builders breakdown
 
-The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels, no corporate fluff, no unsupported claims, a strong ending, and relevant hashtags.
+The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels and bullets, no corporate fluff, no unsupported claims, a reader question near the end, and relevant hashtags.
 
 Daily posts follow this LinkedIn-ready recipe:
 
 - A specific 3 to 8 word title.
 - A short hook that makes the tension clear immediately.
 - One plain-language source-backed context paragraph.
-- 3 to 4 practical sections for PMs, founders, AI builders, or operators.
-- A strong opinion, question, or PM takeaway at the end.
+- 3 to 4 practical sections for PMs, founders, AI builders, or operators, with short bullet points.
+- A strong reader question or PM takeaway near the end.
 - Hashtags inside the post body, with source links appended separately in Slack.
 
 ## Fact-check pass
 
 Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, RSS summary, and fetched article excerpt.
 
-If a factual-looking claim is not supported by that source pack, the agent removes it conservatively. If the result becomes thin, generic, or duplicate-looking, the agent rejects the draft instead of sending it to Slack. Risk flags remain internal logs and are not shown in the Slack draft output.
+If a factual-looking claim is not supported by that source pack, the agent removes it conservatively. If the result becomes thin, generic, missing bullets, missing a reader question, or duplicate-looking, the agent rejects the draft instead of sending it to Slack. Risk flags remain internal logs and are not shown in the Slack draft output.
 
 ## Setup
 
@@ -98,13 +98,13 @@ pip install -r requirements.txt
 Preview without sending to Slack:
 
 ```bash
-python agent.py --dry-run
+python daily_runner.py --dry-run
 ```
 
 Send to Slack:
 
 ```bash
-python agent.py
+python daily_runner.py
 ```
 
 ## GitHub Actions
@@ -123,4 +123,4 @@ X_BEARER_TOKEN
 
 ## Notes
 
-Gemini receives verified source metadata plus a fetched article excerpt for each selected item. Optional X trend context is used only to shape the angle, not to add facts. If Gemini cannot produce enough publishable drafts, the agent fails instead of sending generic filler.
+Gemini receives verified source metadata plus a fetched article excerpt for each selected item. Optional X trend context is used only to shape the angle, not to add facts. The scheduled workflow runs `daily_runner.py`, which wraps `agent.py` with the latest writing policy and can still produce structured, source-backed drafts without inventing facts if Gemini cannot produce enough publishable drafts.
