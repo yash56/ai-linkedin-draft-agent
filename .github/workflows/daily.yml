@@ -31,5 +31,6 @@ jobs:
           GEMINI_MODEL: gemini-3-flash-preview
           FRESH_HOURS: "36"
           ALLOW_TEMPLATE_FALLBACK: "false"
+          ALLOW_CONSERVATIVE_FALLBACK: "true"
           LOG_LEVEL: INFO
         run: python agent.py
