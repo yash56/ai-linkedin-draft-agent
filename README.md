@@ -29,7 +29,7 @@ Slack Sender
 - Gives configured trusted sources extra ranking weight.
 - Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
 - Optionally reads recent X posts when `X_BEARER_TOKEN` is configured, but only as trend context for angle selection.
-- Writes like a sharp Product Manager who tracks AI deeply, using narrative post archetypes inspired by role shifts, failure breakdowns, builder playbooks, launch lessons, and uncomfortable PM truths.
+- Writes like a sharp Product Manager who tracks AI deeply, with short, specific posts instead of generic AI commentary.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
 - Rejects drafts that are too short, too generic, missing useful sections, or too similar to another draft.
 - Ranks a larger candidate pool so one weak article does not block the whole daily run.
@@ -63,16 +63,19 @@ Each generated post uses one of these styles:
 - Slightly sarcastic industry observation
 - What this means for builders breakdown
 
-The prompt requires a short title, a punchy opening contrast, practical sections with reader-friendly labels and bullets, no corporate fluff, no unsupported claims, a reader question near the end, and relevant hashtags.
+The prompt requires a strong simple hook, a plain-English explanation of the actual news, one sharp product insight, useful bullets, no corporate fluff, no unsupported claims, a reader question near the end, and relevant hashtags.
 
 Daily posts follow this LinkedIn-ready recipe:
 
-- A specific 3 to 8 word title.
-- A short hook that makes the tension clear immediately.
-- One plain-language source-backed context paragraph.
-- 3 to 4 practical sections for PMs, founders, AI builders, or operators, with short bullet points.
-- A strong reader question or PM takeaway near the end.
+- A specific short title.
+- A hook that immediately explains why the news matters.
+- A plain-English explanation of the actual news.
+- 2 to 4 useful bullet points with a PM, product, builder, or business lens.
+- One opinionated product takeaway.
+- A thoughtful reader question near the end.
 - Hashtags inside the post body, with source links appended separately in Slack.
+
+The stricter daily runner rejects vague filler such as `PMs should read this as a workflow signal`, `Here is the source-backed context`, `A practical PM read is simple`, `The useful question is`, `What changed`, `Why PMs should care`, and `Reader value`.
 
 ## Fact-check pass
 
