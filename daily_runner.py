@@ -1,4 +1,4 @@
-"""Runtime quality policy for the scheduled LinkedIn draft agent."""
+"""Sharper daily writing policy for the scheduled LinkedIn draft agent."""
 
 from __future__ import annotations
 
@@ -9,94 +9,186 @@ import zlib
 import agent
 
 
-BACKUP_POST_SHAPES = [
+FORBIDDEN_PHRASES = [
+    "PMs should read this as a workflow signal",
+    "PMs should read it as a workflow signal",
+    "Here is the source-backed context",
+    "A practical PM read is simple",
+    "The useful question is",
+    "What changed",
+    "Why PMs should care",
+    "Reader value",
+    "another AI update",
+    "workflow signal",
+]
+
+POST_SHAPES = [
     {
-        "hook": (
-            "Everyone will skim this as another AI update.\n"
-            "PMs should read it as a workflow signal."
-        ),
-        "sections": [
-            ("What changed", "Treat this as a signal about the product workflow, not a press release to admire from a distance.", "Map it to a real user moment before calling it strategically important."),
-            ("Why PMs should care", "The useful question is which user action becomes easier, safer, faster, or more measurable.", "If that action is fuzzy, the product story is still fuzzy."),
-            ("Reader value", "Turn the news into a checklist before turning it into a roadmap item.", "Ask what proof would make the update worth changing a roadmap, budget, or team process."),
-            ("What builders should watch", "Look for the boring parts: permissions, reliability, evaluation, latency, cost, and failure handling.", "That is usually where AI products become useful, or quietly fall apart."),
+        "hook": "{title} matters because it is not just a model story. It is a product trust story.",
+        "label": "The product angle",
+        "bullets": [
+            "The first question is whether this makes a repeated user job easier.",
+            "The second is whether teams can evaluate it without guessing.",
+            "The third is what breaks when the product leaves the demo environment.",
         ],
-        "question": "If you were evaluating this for your product, what would you validate first: user demand, reliability, cost, or workflow fit?",
+        "insight": "My PM read: the winners in AI will not be the teams with the loudest launch. They will be the teams that make the new capability boringly reliable.",
+        "question": "Would you trust this in a real customer workflow today, or would you still keep a human checkpoint in the loop?",
     },
     {
-        "hook": (
-            "The announcement is the easy part.\n"
-            "The harder part is figuring out what it changes for real teams."
-        ),
-        "sections": [
-            ("Product read", "Start with the job-to-be-done, not the model or company name.", "A strong AI update should make one painful step easier to understand or complete."),
-            ("Adoption risk", "Ask where the user still needs trust, control, review, or escalation before this becomes daily behavior.", "The gap between impressive and dependable is where most AI products get humbled."),
-            ("Builder lens", "Separate a useful workflow improvement from a feature that only looks good in a demo.", "Demo value gets attention. Workflow value gets retention."),
-            ("PM takeaway", "The best AI products reduce ambiguity for users instead of adding another shiny surface area.", "If the update creates more decisions than it removes, users will feel the tax immediately."),
+        "hook": "{title} is a reminder that AI product work is moving from features to operating systems.",
+        "label": "Where this gets interesting",
+        "bullets": [
+            "The user does not care how impressive the underlying system is.",
+            "They care whether it removes friction from a job they already need to do.",
+            "For PMs, the hard part is turning capability into a habit.",
         ],
-        "question": "What would make this genuinely useful in your workflow: better accuracy, clearer controls, faster setup, or stronger proof it works?",
+        "insight": "The sharp product question is not 'can it do this?' It is 'will users change behavior because of this?' That is a much higher bar.",
+        "question": "If you owned this product, what would you measure first: adoption, trust, repeat usage, or failure rate?",
     },
     {
-        "hook": (
-            "This is not just a technology update.\n"
-            "It is a small clue about where AI products are getting pulled next."
-        ),
-        "sections": [
-            ("Market signal", "Watch which workflow the news points toward, because that usually reveals the buyer pain.", "The headline matters less than the repeated job underneath it."),
-            ("Execution gap", "The hard work is rarely the announcement. It is deployment, measurement, support, and trust.", "This is where product teams need operating discipline, not just better prompts."),
-            ("PM checklist", "Ask who owns success after launch and what evidence would prove the product is improving.", "Without that loop, the roadmap becomes a pile of AI experiments with nicer branding."),
-            ("Builder takeaway", "Durable AI products make a repeated task easier to complete, not just easier to describe.", "A useful product shift should survive contact with messy users and imperfect data."),
+        "hook": "{title} matters because the AI market is starting to reward proof, not just possibility.",
+        "label": "The builder lens",
+        "bullets": [
+            "A launch is only useful if it changes a real workflow.",
+            "A claim is only useful if users can verify it in their own context.",
+            "A product is only defensible if it gets better after real usage.",
         ],
-        "question": "Would you treat this as a real product signal, or just another AI headline until users prove otherwise?",
+        "insight": "This is where many AI products quietly struggle. The demo is clean. The customer environment is not.",
+        "question": "What proof would make you believe this is a durable product shift rather than a strong announcement?",
     },
     {
-        "hook": (
-            "AI news moves fast enough to make every update sound urgent.\n"
-            "Most of them are not. Some are signals."
-        ),
-        "sections": [
-            ("Signal quality", "A strong signal points to a concrete workflow, user pain, or operating model change.", "If you cannot name the workflow, you probably only have a headline."),
-            ("Noise filter", "Ignore the drama and inspect what can be shipped, measured, trusted, or adopted.", "A little skepticism is healthy. In AI, it is basically product hygiene."),
-            ("Team impact", "The PM question is whether this changes prioritization, onboarding, evaluation, or customer expectations.", "That is where news becomes useful for operators."),
-            ("What to watch", "The next proof point is not the launch language. It is whether users keep coming back.", "Retention beats announcement energy every single time."),
+        "hook": "{title} is the kind of update that looks technical, but the real story is user behavior.",
+        "label": "The PM takeaway",
+        "bullets": [
+            "Do users understand what changed?",
+            "Can they control the output when it matters?",
+            "Can the team explain success without hiding behind model jargon?",
         ],
-        "question": "What would you need to see before calling this a durable AI product shift?",
+        "insight": "Good AI products do not make users admire the technology. They make users feel more capable.",
+        "question": "Where do you think the biggest adoption risk sits here: trust, UX, cost, or unclear user value?",
+    },
+]
+
+
+KEYWORD_SHAPES = [
+    {
+        "keywords": ["spark", "calendar", "emails", "assistant"],
+        "title": "Gemini Spark's Agent Problem",
+        "hook": "Gemini Spark shows the uncomfortable truth about AI agents: access to your data is not the same as judgment.",
+        "label": "The product lesson",
+        "bullets": [
+            "Personal agents need context, but they also need taste.",
+            "The risk is not that the agent fails loudly. It is that it misses something obvious and still sounds confident.",
+            "For PMs, this is a reminder that permissions are not the same as product value.",
+        ],
+        "insight": "Agent products will win when they understand the user's real priority, not just the user's available data.",
+        "question": "Where would you draw the line between useful automation and a human decision that should stay human?",
+    },
+    {
+        "keywords": ["coding agent", "coding agents", "devin", "programmers", "replace humans", "codex"],
+        "title": "Coding Agents Need A Human Plan",
+        "hook": "The interesting part of AI coding agents is not whether they replace developers. It is how they change the developer's job.",
+        "label": "The PM lesson",
+        "bullets": [
+            "A coding agent is most useful when the task is clear and the feedback loop is tight.",
+            "It becomes risky when ownership, review, and debugging are vague.",
+            "The product challenge is not code generation. It is trustable delivery.",
+        ],
+        "insight": "The best developer tools do not remove judgment. They move human judgment to a higher-leverage part of the workflow.",
+        "question": "Would you position coding agents as replacements, teammates, or a new layer of engineering infrastructure?",
+    },
+    {
+        "keywords": ["ai-pilled", "replace your job", "workforce", "layoffs", "job truly involves"],
+        "title": "The AI Replacement Trap",
+        "hook": "The fastest way to misuse AI at work is to assume you understand a job better than the person doing it.",
+        "label": "The business risk",
+        "bullets": [
+            "AI can remove tasks, but roles are usually messier than task lists.",
+            "Leaders who skip workflow discovery will automate the wrong thing with impressive confidence.",
+            "The product question is where AI improves leverage without destroying context.",
+        ],
+        "insight": "Replacing work you do not understand is not strategy. It is cost-cutting with a nicer deck.",
+        "question": "What is the first workflow you would audit before replacing any role with an AI agent?",
+    },
+    {
+        "keywords": ["governance", "safety", "security", "risk", "regulations"],
+        "title": "AI Governance Becomes Product Work",
+        "hook": "AI governance is no longer a policy side quest. It is becoming part of the product itself.",
+        "label": "The PM angle",
+        "bullets": [
+            "Trust has to show up in the user experience, not just in a PDF.",
+            "Risk controls need owners, metrics, and release gates.",
+            "If governance slows the team down, teams will route around it. If it is designed well, it becomes infrastructure.",
+        ],
+        "insight": "The next generation of AI products will need safety work that feels operational, not ceremonial.",
+        "question": "Should AI governance sit with legal, product, engineering, or a dedicated risk team?",
+    },
+    {
+        "keywords": ["omni", "demo", "videos", "model", "available on aws", "bedrock", "opus"],
+        "title": "The Model Launch Test",
+        "hook": "A new AI model only matters when it changes what builders can ship with confidence.",
+        "label": "The builder test",
+        "bullets": [
+            "Does it make an existing workflow meaningfully better?",
+            "Can teams evaluate quality without relying on vibes?",
+            "Does the product make adoption easier, or just add another option to compare?",
+        ],
+        "insight": "Model launches create attention. Product packaging creates usage.",
+        "question": "What would make you switch models in a real product: quality, cost, latency, tooling, or trust?",
     },
 ]
 
 
 def compact_source_title(title: str, max_words: int = 8) -> str:
-    normalized = title.replace("\u2018", "'").replace("\u2019", "'").replace('"', "").replace("'", "")
-    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'&+-]*", agent.clean_text(normalized, max_length=160))
+    normalized = (
+        title.replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace('"', "")
+        .replace("'", "")
+    )
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9&+.-]*", agent.clean_text(normalized, max_length=160))
+    while words and words[-1].lower() in {"and", "or", "with", "for", "to", "at", "on", "in", "when", "from"}:
+        words.pop()
     if not words:
-        return "The AI Builder Signal"
-    return " ".join(words[:max_words]).strip(" -,:;") or "The AI Builder Signal"
+        return "The AI Product Signal"
+    return " ".join(words[:max_words]).strip(" -,:;") or "The AI Product Signal"
+
+
+def keyword_shape_for_item(item: agent.NewsItem) -> dict[str, object] | None:
+    searchable = f"{item.title} {item.summary} {item.source_excerpt}".lower()
+    for shape in KEYWORD_SHAPES:
+        if any(keyword in searchable for keyword in shape["keywords"]):
+            return shape
+    return None
+
+
+def plain_news(item: agent.NewsItem, max_words: int = 52) -> str:
+    text = item.summary or item.source_excerpt or item.title
+    text = agent.clean_text(text, max_length=700)
+    words = text.split()
+    if len(words) <= max_words:
+        return text.rstrip(".")
+    return " ".join(words[:max_words]).rstrip(" ,.;:") + "..."
 
 
 def shape_for_item(item: agent.NewsItem) -> dict[str, object]:
-    index = zlib.crc32(f"{item.url}|{item.title}".encode("utf-8")) % len(BACKUP_POST_SHAPES)
-    return BACKUP_POST_SHAPES[index]
+    index = zlib.crc32(f"{item.url}|{item.title}".encode("utf-8")) % len(POST_SHAPES)
+    return POST_SHAPES[index]
 
 
 def conservative_draft(item: agent.NewsItem) -> agent.Draft:
-    summary = item.summary or item.source_excerpt or f"The source item is titled {item.title}."
-    title = compact_source_title(item.title)
-    shape = shape_for_item(item)
-    sections = shape["sections"]
-    section_text = "\n\n".join(
-        (
-            f"{label}\n"
-            f"- {point}\n"
-            f"- {follow_up}"
-        )
-        for label, point, follow_up in sections
-    )
+    shape = keyword_shape_for_item(item) or shape_for_item(item)
+    title = str(shape.get("title") or compact_source_title(item.title))
+    news = plain_news(item)
+    bullets = "\n".join(f"- {bullet}" for bullet in shape["bullets"])
     body = (
-        f"{shape['hook']}\n\n"
-        "The useful question is what it changes for people building, buying, or managing products.\n\n"
-        f"Here is the source-backed context: {summary}\n\n"
-        "A practical PM read is simple: do not ask whether the announcement sounds impressive. Ask what behavior it could change, what risk it introduces, and what proof would make a team comfortable using it.\n\n"
-        f"{section_text}\n\n"
+        f"{shape['hook'].format(title=title)}\n\n"
+        f"The news: {news}.\n\n"
+        f"{shape['label']}\n"
+        f"{bullets}\n\n"
+        f"{shape['insight']}\n\n"
         f"{shape['question']}\n\n"
         f"{agent.DEFAULT_HASHTAGS}"
     )
@@ -107,47 +199,32 @@ def conservative_draft(item: agent.NewsItem) -> agent.Draft:
         source_links=[item.url],
         fact_check_notes=[
             f"Title, source, URL, and published date came from {item.source_name}'s RSS feed.",
-            "Conservative writer used only source metadata plus generic PM evaluation lenses.",
+            "Conservative writer used source metadata plus generic product analysis only.",
         ],
     )
 
 
 def has_reader_question(text: str) -> bool:
     without_hashtags = "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
-    return "?" in without_hashtags[-700:]
+    return "?" in without_hashtags[-500:]
 
 
 def validate_draft_quality(draft: agent.Draft) -> agent.Draft:
     body = draft.body.strip()
     title = draft.title.strip()
+    combined = f"{title}\n{body}"
     word_count = len(re.findall(r"\b[\w']+\b", body))
     bullet_count = len(re.findall(r"(?m)^\s*-\s+\S+", body))
-    section_count = len(re.findall(r"(?m)^[^\n]{0,6}[A-Z][A-Za-z /&-]{2,40}$", body))
-    section_count += len(re.findall(r"(?m)^[^\n]{0,4}[\U0001F300-\U0001FAFF]\ufe0f?\s*[A-Z][^\n]{2,45}$", body))
-    low_quality_patterns = [
-        r"^hook\s*:",
-        r"^linkedin post body\s*:",
-        r"^suggested ending\s*:",
-        r"^fact-check notes\s*:",
-        r"^risk flags\s*:",
-        r"^sources\s*:",
-        r"the headline is interesting",
-        r"the product question underneath",
-        r"verify the linked source",
-        r"published this on \d{4}-\d{2}-\d{2}",
-    ]
-    if word_count < 220:
+    if word_count < 115:
         raise agent.AgentError(f"Draft quality gate failed: body is too short ({word_count} words).")
-    if word_count > 520:
+    if word_count > 280:
         raise agent.AgentError(f"Draft quality gate failed: body is too long ({word_count} words).")
-    if section_count < 2:
-        raise agent.AgentError("Draft quality gate failed: missing useful section labels.")
-    if bullet_count < 3:
-        raise agent.AgentError("Draft quality gate failed: missing practical bullet points.")
+    if bullet_count < 2:
+        raise agent.AgentError("Draft quality gate failed: missing useful bullet points.")
     if not has_reader_question(body):
         raise agent.AgentError("Draft quality gate failed: missing a reader question near the end.")
-    if any(re.search(pattern, f"{title}\n{body}", re.I) for pattern in low_quality_patterns):
-        raise agent.AgentError("Draft quality gate failed: generic fallback language detected.")
+    if any(phrase.lower() in combined.lower() for phrase in FORBIDDEN_PHRASES):
+        raise agent.AgentError("Draft quality gate failed: banned generic wording detected.")
     return draft
 
 
@@ -155,28 +232,36 @@ def build_gemini_prompt(item: agent.NewsItem, style: str, trend_context: str) ->
     published_text = item.published_at.strftime("%Y-%m-%d %H:%M UTC")
     summary = item.summary or "No usable RSS summary was provided."
     return f"""
-You are writing one LinkedIn post like a sharp Product Manager who tracks AI deeply.
+You are writing one LinkedIn post like a sharp Product Manager who tracks AI closely.
 
-Write for PMs, founders, and AI builders, but make it understandable for smart non-experts.
-Use only the source metadata below for facts. Do not invent numbers, capabilities, quotes, customers, release dates, benchmarks, funding amounts, or product claims.
+Goal:
+Write a clear, specific, human LinkedIn draft about the actual news. The reader should understand what happened, why it matters, and what product lesson to take away.
 
-Structure:
-- Short title, 3 to 8 words.
-- Punchy opening with tension, not a report recap.
-- One plain-language context paragraph grounded in the source.
-- 3 to 4 labeled sections with short bullet points using "- ".
-- A reader question near the end before hashtags.
-- 8 to 12 relevant hashtags.
-
-Style:
-- Sharp PM who tracks AI deeply.
-- Practical, readable, human, sometimes lightly sarcastic.
-- Avoid corporate fluff, generic AI hype, and complex jargon.
+Hard rules:
+- Use only the source metadata below for factual claims.
+- Do not invent numbers, capabilities, quotes, customers, timelines, benchmarks, funding amounts, or product claims.
 - Do not use em dashes.
-- Do not include Hook, LinkedIn post body, Suggested ending, Sources, Fact-check notes, or Risk flags.
-- Length: 260 to 430 words.
+- Do not use these phrases: "PMs should read this as a workflow signal", "Here is the source-backed context", "A practical PM read is simple", "The useful question is", "What changed", "Why PMs should care", "Reader value".
+- Do not sound like a press release, generic AI newsletter, or ChatGPT.
+- Keep the post around 120 to 220 words.
+- Use short paragraphs.
+- Include 2 to 4 useful bullet points.
+- End with a thoughtful reader question.
+- End with 8 to 12 relevant hashtags.
 
-Required archetype: {style}
+Post structure:
+1. Strong simple hook explaining why the news matters.
+2. Plain-English explanation of the actual news.
+3. Product/PM insight with a point of view.
+4. Practical takeaway or question.
+5. Hashtags.
+
+Quality bar:
+- Every sentence must explain the news, add a useful product insight, or create curiosity.
+- Avoid abstract commentary and filler.
+- Make it readable for PMs, founders, and tech professionals.
+
+Style to vary today: {style}
 
 Source metadata:
 Title: {item.title}
@@ -219,7 +304,7 @@ def drafts_are_too_similar(first: agent.Draft, second: agent.Draft) -> bool:
         agent.meaningful_tokens(f"{first.title} {first.body}"),
         agent.meaningful_tokens(f"{second.title} {second.body}"),
     )
-    return body_similarity > 0.70
+    return body_similarity > 0.62
 
 
 def main() -> None:
