@@ -30,6 +30,7 @@ Slack Sender
 - Uses Gemini 3 Flash Preview for draft writing when `GEMINI_API_KEY` is configured.
 - Optionally reads recent X posts when `X_BEARER_TOKEN` is configured, but only as trend context for angle selection.
 - Writes like a sharp Product Manager who tracks AI deeply, with short, specific posts instead of generic AI commentary.
+- Keeps the daily Slack drafts in natural LinkedIn-style paragraphs, without template headers such as `The News`, `The PM Lesson`, `Key Takeaways`, or generic bullet blocks.
 - Runs an automated source-pack claim audit before sending drafts to Slack.
 - Rejects drafts that are too short, too generic, missing useful sections, or too similar to another draft.
 - Ranks a larger candidate pool so one weak article does not block the whole daily run.
@@ -63,25 +64,25 @@ Each generated post uses one of these styles:
 - Slightly sarcastic industry observation
 - What this means for builders breakdown
 
-The prompt requires a strong simple hook, a plain-English explanation of the actual news, one sharp product insight, useful bullets, no corporate fluff, no unsupported claims, a reader question near the end, and relevant hashtags.
+The prompt requires a strong simple hook, a plain-English explanation of the actual news, one sharp product insight, no corporate fluff, no unsupported claims, a natural closing thought or one thoughtful question, and relevant hashtags.
 
 Daily posts follow this LinkedIn-ready recipe:
 
 - A specific short title.
 - A hook that immediately explains why the news matters.
 - A plain-English explanation of the actual news.
-- 2 to 4 useful bullet points with a PM, product, builder, or business lens.
-- One opinionated product takeaway.
-- A thoughtful reader question near the end.
+- Natural paragraphs that connect the source fact to organizational efficiency, adoption curves, Product Marketing, market impact, or end-user experience.
+- One opinionated but clearly framed product or market takeaway.
+- A thoughtful closing line or a single peer-style question.
 - Hashtags inside the post body, with source links appended separately in Slack.
 
-The stricter daily runner rejects vague filler such as `PMs should read this as a workflow signal`, `Here is the source-backed context`, `A practical PM read is simple`, `The useful question is`, `What changed`, `Why PMs should care`, and `Reader value`.
+The stricter daily runner rejects vague filler such as `PMs should read this as a workflow signal`, `Here is the source-backed context`, `A practical PM read is simple`, `The useful question is`, `What changed`, `Why PMs should care`, `Reader value`, `The News`, `The PM Lesson`, `Key Takeaways`, and multiple-choice engagement endings.
 
 ## Fact-check pass
 
 Before sending to Slack, the agent audits each generated draft against the source pack: title, source, published date, URL, category, credibility, RSS summary, and fetched article excerpt.
 
-If a factual-looking claim is not supported by that source pack, the agent removes it conservatively. If the result becomes thin, generic, missing bullets, missing a reader question, or duplicate-looking, the agent rejects the draft instead of sending it to Slack. Risk flags remain internal logs and are not shown in the Slack draft output.
+If a factual-looking claim is not supported by that source pack, the agent removes it conservatively. If the result becomes thin, generic, template-like, duplicate-looking, or uses unsupported facts, the agent rejects the draft instead of sending it to Slack. Risk flags remain internal logs and are not shown in the Slack draft output.
 
 ## Setup
 
