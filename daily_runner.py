@@ -1,8 +1,8 @@
 """Daily writing policy for the scheduled LinkedIn draft agent.
 
-This wrapper keeps the core collector intact, but makes the writing layer much
-stricter: source-backed facts only, natural paragraphs, no generic headers, and
-no textbook-style post templates.
+The goal is not a polite news recap. The daily output should read like a sharp
+LinkedIn post from a PM who understands AI adoption, failure modes, GTM, and
+why the news matters to builders.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ FORBIDDEN_PHRASES = [
     "Here is the source-backed context",
     "A practical PM read is simple",
     "The useful question is",
+    "The headline is interesting",
+    "The product question underneath it is more useful",
     "What changed",
     "Why PMs should care",
     "Reader value",
@@ -29,18 +31,12 @@ FORBIDDEN_PHRASES = [
     "The News",
     "The news:",
     "The PM Lesson",
-    "The product angle",
-    "Where this gets interesting",
-    "The builder lens",
-    "The PM takeaway",
-    "The product lesson",
-    "The business risk",
-    "The PM angle",
-    "The builder test",
     "another AI update",
     "workflow signal",
-    "deploy today",
-    "high-performance engine",
+    "quieter shift",
+    "model politics",
+    "doing too much homework",
+    "look how advanced this is",
 ]
 
 GENERIC_SECTION_HEADERS = [
@@ -55,14 +51,6 @@ GENERIC_SECTION_HEADERS = [
     "reader value",
     "market signal",
     "builder takeaway",
-    "the product angle",
-    "where this gets interesting",
-    "the builder lens",
-    "the pm takeaway",
-    "the product lesson",
-    "the business risk",
-    "the pm angle",
-    "the builder test",
 ]
 
 MULTIPLE_CHOICE_ENDING_PATTERNS = [
@@ -124,79 +112,122 @@ KNOWN_ENTITY_TOKENS = [
     "Gartner",
 ]
 
-ANGLE_SHAPES = [
+STORY_SHAPES = [
     {
-        "hook": "{title} matters because it shows a quieter shift in AI adoption: the winning product is often the one that removes decisions, not the one that adds more knobs.",
-        "middle": "That is an organizational efficiency story more than a model story. When AI gets closer to daily work, teams do not just ask whether the technology is impressive. They ask whether it reduces handoffs, shortens review cycles, or makes the next step easier for the person using it.",
-        "insight": "The product marketing lesson is to stop selling the capability in isolation. The better message is the workflow it simplifies and the confusion it removes.",
-        "closing": "If a user needs a long explainer before they can feel the value, the product is still doing too much homework on their behalf.",
+        "hook": "{subject} looks like a product update. The more interesting part is what it says about adoption.",
+        "setup": "The source says {news}. That is the fact pattern worth using. The PM question is not whether the announcement sounds impressive. It is whether the update makes the product easier to understand, easier to trust, or easier to sell internally.",
+        "bridge": "Here is where this kind of AI update usually wins or loses:",
+        "sections": [
+            ("User Clarity", "If the user cannot explain what changed in one sentence, adoption slows down before the product even gets tested."),
+            ("Workflow Fit", "A useful AI feature removes a step from an existing habit. A weak one asks users to build a new habit just to see the value."),
+            ("Trust Surface", "The product has to show where the system is confident, where it is unsure, and where a human should still stay in the loop."),
+            ("PMM Angle", "The strongest message is not capability. It is the before-and-after story users can repeat to their own team."),
+        ],
+        "wrap": "This is why packaging matters so much in AI. The model may create the capability, but the product and marketing decide whether anyone knows what to do with it.",
+        "closing": "What would make this become a real behavior change instead of another headline people bookmark and forget?",
     },
     {
-        "hook": "{title} is a good reminder that AI adoption rarely moves because of one dramatic feature. It moves when a product becomes easier to understand, trust, and repeat.",
-        "middle": "This is where many AI launches get misread. The announcement creates attention, but adoption comes from the boring parts: fewer choices, clearer defaults, less context switching, and a user experience that does not make people feel like they are debugging the product.",
-        "insight": "For product marketing, the useful angle is not 'look how advanced this is.' It is 'look how little extra behavior we are asking from the user.'",
-        "closing": "The real adoption question is whether this makes the user come back tomorrow without needing to be convinced again.",
+        "hook": "Everyone watches the launch. The better signal is what the launch forces users to stop tolerating.",
+        "setup": "The verified update is simple: {news}. The interesting read is how it changes the expectation for similar AI products in the market.",
+        "bridge": "The adoption curve will probably come down to four boring things:",
+        "sections": [
+            ("Setup Friction", "If it takes too much configuration, only enthusiasts try it. Mainstream users need the value to show up fast."),
+            ("Default Quality", "Most users do not tune systems. They judge the first useful output and decide whether the product deserves another chance."),
+            ("Internal Selling", "Enterprise adoption depends on whether one team can explain the value to another team without sounding like a vendor deck."),
+            ("Failure Recovery", "When AI gets something wrong, the product needs a graceful path back to trust. Otherwise every mistake becomes a retention event."),
+        ],
+        "wrap": "That is the Product Marketing challenge hiding inside most AI news. The market is not short on capability. It is short on simple reasons to believe the capability will survive real usage.",
+        "closing": "If you were selling this internally, what proof would make a skeptical team actually try it?",
     },
     {
-        "hook": "{title} sounds like a product update, but the bigger signal is how AI companies are trying to make advanced tools feel less like experiments and more like everyday software.",
-        "middle": "That matters for teams because the cost of AI adoption is not only money or latency. It is attention. Every new option, model, setting, or workflow asks users to carry more mental overhead before they get value.",
-        "insight": "A sharper product marketing message would focus less on the technology stack and more on the moment where the end user feels the product getting easier.",
-        "closing": "The best AI feature is not always the most powerful one. Sometimes it is the one that makes the product feel obvious.",
+        "hook": "{subject} is a reminder that AI products do not fail only because the model is weak. They fail because the system around the model is unfinished.",
+        "setup": "According to the source, {news}. That gives us the news. The more useful question is what has to be true for users to feel the value in a real workflow.",
+        "bridge": "The fragile parts are usually not glamorous:",
+        "sections": [
+            ("Data Quality", "The product can only reason over the context it can actually retrieve. Bad inputs make good models look careless."),
+            ("Orchestration", "Every tool call, permission, and handoff becomes part of the user experience. If those break, the AI looks dumber than it is."),
+            ("Escalation", "A serious product needs to know when to stop guessing and route the user to a safer path."),
+            ("Evaluation", "Without repeatable tests, teams cannot tell whether yesterday's improvement made today's product worse."),
+        ],
+        "wrap": "That is the part of AI adoption that rarely fits into a launch headline. The hard work is not only generating output. It is making the output dependable enough for people to build a habit around it.",
+        "closing": "What part of the AI lifecycle do you think most teams are still underestimating?",
     },
     {
-        "hook": "{title} is worth watching because the AI market is moving from novelty to packaging. The capability matters, but the way it is delivered may matter even more.",
-        "middle": "For organizations, this is the difference between a tool people try once and a product that changes a workflow. Adoption curves bend when the product fits existing habits, reduces friction, and gives teams a clean way to explain the value internally.",
-        "insight": "That is where Product Marketing has real leverage. It turns a technical update into a buyer-understandable story: who it helps, what pain it removes, and why now is different.",
-        "closing": "The question I would ask in a product review is simple: what job gets easier the first week a user touches this?",
-    },
-    {
-        "hook": "{title} points to the part of AI adoption that does not show up in demos: trust is built through repeated, useful interactions.",
-        "middle": "A launch can create curiosity, but the end-user experience decides whether curiosity becomes habit. People do not adopt AI because a company says the model is smarter. They adopt it when the product saves effort without making them nervous about the outcome.",
-        "insight": "The organizational efficiency angle is practical. If the update helps teams spend less time choosing, checking, or explaining the tool, it has a better chance of becoming part of normal work.",
-        "closing": "The strongest AI products will make users feel more capable, not more dependent on understanding model politics.",
+        "hook": "{subject} is not just a technical update. It is a positioning problem.",
+        "setup": "The source-backed news: {news}. On its own, that may sound narrow. In the market, though, narrow updates can matter when they reduce confusion for buyers or end users.",
+        "bridge": "A good PMM read would focus on three things:",
+        "sections": [
+            ("Category Clarity", "Does this help users understand what the product is for, or does it add one more vague AI promise to the pile?"),
+            ("Buyer Confidence", "The message needs to make risk feel manageable. If teams cannot explain the change, they will delay adoption."),
+            ("End-User Relief", "The best AI updates remove small moments of friction that users already hate, even if the launch itself sounds technical."),
+            ("Proof Loop", "The product needs a way to show that quality is improving over time, not just that the roadmap is moving."),
+        ],
+        "wrap": "This is why the clearest AI companies will have an advantage. They will not just ship features. They will make the value legible.",
+        "closing": "How much product power is wasted when users cannot explain the value after one meeting?",
     },
 ]
 
-KEYWORD_ANGLES = [
+KEYWORD_STORY_SHAPES = [
+    {
+        "keywords": ["agent", "agents", "assistant", "assistants", "spark"],
+        "hook": "AI agents are not failing because the word agent is overused. They are failing because too many products confuse access with judgment.",
+        "setup": "The source says {news}. That is the verified update. The bigger lesson is that users do not adopt agents just because the system can touch more context.",
+        "bridge": "Here is where agent products usually break:",
+        "sections": [
+            ("Context Quality", "The agent cannot find truth inside messy docs, stale policies, and half-owned internal knowledge."),
+            ("Tool Reliability", "If APIs are slow, brittle, or undocumented, the agent becomes a confident wrapper around fragile plumbing."),
+            ("Escalation Logic", "The product needs to know when it is confused. Guessing is not autonomy. It is bad UX with a nicer name."),
+            ("Evaluation Gaps", "Without regression tests, teams cannot prove whether the agent improved or quietly drifted."),
+        ],
+        "wrap": "The useful lesson is simple: agent quality is a system design problem. The model matters, but the surrounding workflow decides whether users trust it twice.",
+        "closing": "What is the first weak link you would audit before putting an agent in front of customers?",
+    },
     {
         "keywords": ["coding agent", "coding agents", "devin", "programmers", "codex", "copilot"],
-        "hook": "{title} is not really about whether AI replaces developers. It is about whether engineering teams can make AI useful without losing review quality.",
-        "middle": "That is an organizational efficiency problem. Coding agents and copilots only create leverage when the task is clear, the handoff is clean, and the team still knows who owns the final output.",
-        "insight": "The product marketing mistake is to frame this as magic automation. The stronger story is simpler: fewer low-value steps, faster feedback, and more time for engineers to focus on the parts of software that still need judgment.",
-        "closing": "The real test is not whether AI can write code. It is whether the team can ship better software with less coordination drag.",
-    },
-    {
-        "keywords": ["governance", "safety", "security", "risk", "regulation", "compliance"],
-        "hook": "{title} shows why AI governance is becoming part of the product experience, not just a policy document sitting somewhere nobody reads.",
-        "middle": "For buyers and end users, trust has to be visible in the workflow. If safeguards are hidden, slow, or hard to explain, adoption becomes harder even when the underlying technology is strong.",
-        "insight": "This is where product marketing needs to get more concrete. The message should not be 'we are responsible.' It should explain how the product helps teams use AI with fewer surprises and clearer accountability.",
-        "closing": "Trust becomes easier to sell when users can see how it works.",
-    },
-    {
-        "keywords": ["assistant", "calendar", "email", "emails", "agent", "agents", "spark"],
-        "hook": "{title} highlights a hard truth about AI assistants: access to context is useful, but it is not the same thing as good judgment.",
-        "middle": "The adoption curve for assistants depends on whether people feel helped, not watched. A product can have more context and still fail if the user has to double-check every suggestion or repair every awkward action.",
-        "insight": "The sharper product marketing angle is not 'the assistant knows more about you.' It is 'the assistant saves effort while keeping you in control.' That distinction matters because trust is the product.",
-        "closing": "The assistant that wins will probably feel less like a genius and more like a reliable teammate who knows when not to touch things.",
+        "hook": "AI coding tools are not really testing whether developers can be replaced. They are testing whether engineering teams can change how work moves.",
+        "setup": "The verified news is this: {news}. The practical read is not that software suddenly writes itself. It is that the bottleneck moves.",
+        "bridge": "The teams that get value will obsess over the parts around code generation:",
+        "sections": [
+            ("Spec Quality", "A coding agent is only as useful as the task definition. Vague tickets create confident but misaligned output."),
+            ("Review Loops", "Human review does not disappear. It moves closer to architecture, tradeoffs, edge cases, and maintainability."),
+            ("Test Discipline", "If tests are weak, speed becomes dangerous. The team ships faster and discovers the mess later."),
+            ("Ownership", "Someone still owns the final decision. If nobody does, the agent becomes a very fast source of ambiguity."),
+        ],
+        "wrap": "The best positioning for coding agents is not replacement. It is leverage. Less time on repetitive implementation, more time on judgment-heavy engineering work.",
+        "closing": "Can your team absorb AI-generated speed without lowering the engineering bar?",
     },
     {
         "keywords": ["model", "models", "omni", "opus", "sonnet", "flash", "bedrock", "llama"],
-        "hook": "{title} is a useful reminder that model news only becomes product news when it changes what users can do with less friction.",
-        "middle": "A stronger model or a different model menu may create attention, but adoption depends on packaging. Can teams evaluate it easily? Can end users understand what changed? Can the product owner explain the value without turning the launch into a technical lecture?",
-        "insight": "This is a Product Marketing problem hiding inside a technical update. The market does not just need more capability. It needs clearer reasons to switch, trust, or keep using the product.",
-        "closing": "A model announcement earns its place when it changes behavior, not just the comparison chart.",
+        "hook": "Model news gets attention. Product adoption comes from what teams can do with the model without needing a PhD in comparison charts.",
+        "setup": "The source-backed update is: {news}. That is the factual base. The market question is whether this makes the product easier to choose, easier to trust, or easier to operationalize.",
+        "bridge": "A useful product read has four layers:",
+        "sections": [
+            ("Use-Case Fit", "A stronger model only matters when it maps to a job users already care about."),
+            ("Switching Cost", "Teams do not change models for vibes. They need a reason that beats migration work, risk, and re-testing."),
+            ("Evaluation", "If quality cannot be measured in the user's context, the buying decision becomes guesswork."),
+            ("Packaging", "The model is the engine. The product experience is what turns it into something people actually adopt."),
+        ],
+        "wrap": "That is why the best AI launches are not only about capability. They make the decision easier for builders, buyers, and end users at the same time.",
+        "closing": "What would make a model update meaningful enough for your team to actually change behavior?",
     },
     {
-        "keywords": ["job", "jobs", "workforce", "layoff", "layoffs", "replace", "replacing"],
-        "hook": "{title} is the kind of AI workforce story that deserves a little less panic and a lot more workflow diagnosis.",
-        "middle": "Roles are rarely just task lists. When organizations rush to automate without understanding the handoffs, exceptions, and judgment calls inside a job, they risk making the operation look leaner while making the customer experience worse.",
-        "insight": "The adoption lesson is uncomfortable but useful: AI creates efficiency only when the company knows which parts of the work are repeatable and which parts still need human ownership.",
-        "closing": "Before replacing a role, the smarter question is whether the company can even describe the work accurately.",
+        "keywords": ["governance", "safety", "security", "risk", "regulation", "compliance"],
+        "hook": "AI governance is becoming a product feature whether teams like it or not.",
+        "setup": "The source says {news}. That matters because trust is no longer something companies can hide in a policy page after the launch.",
+        "bridge": "The real adoption blockers usually look like this:",
+        "sections": [
+            ("Auditability", "Users and buyers need to understand what happened, not just accept that the system produced an answer."),
+            ("Control Design", "Good governance shows up as usable controls, not a compliance maze that everyone routes around."),
+            ("Human Escalation", "The product needs a clean path for moments where automation should stop and human judgment should take over."),
+            ("Buyer Trust", "Security and governance claims have to become easy to explain in procurement, legal, and customer conversations."),
+        ],
+        "wrap": "The companies that make governance feel operational will move faster than the companies that treat it as launch paperwork.",
+        "closing": "Where does your team need trust to show up before AI adoption feels safe?",
     },
 ]
 
 
-def compact_source_title(title: str, max_words: int = 9) -> str:
+def compact_source_title(title: str, max_words: int = 8) -> str:
     normalized = (
         title.replace("\u2018", "'")
         .replace("\u2019", "'")
@@ -209,11 +240,11 @@ def compact_source_title(title: str, max_words: int = 9) -> str:
     while words and words[-1].lower() in {"and", "or", "with", "for", "to", "at", "on", "in", "when", "from"}:
         words.pop()
     if not words:
-        return "AI Adoption Is Getting More Operational"
-    return " ".join(words[:max_words]).strip(" -,:;") or "AI Adoption Is Getting More Operational"
+        return "The AI Adoption Test"
+    return " ".join(words[:max_words]).strip(" -,:;") or "The AI Adoption Test"
 
 
-def plain_news(item: agent.NewsItem, max_words: int = 46) -> str:
+def plain_news(item: agent.NewsItem, max_words: int = 42) -> str:
     text = item.summary or item.source_excerpt or item.title
     text = agent.clean_text(text, max_length=700).strip(" .")
     words = text.split()
@@ -222,13 +253,13 @@ def plain_news(item: agent.NewsItem, max_words: int = 46) -> str:
     return " ".join(words[:max_words]).rstrip(" ,.;:") + "..."
 
 
-def shape_for_item(item: agent.NewsItem) -> dict[str, str]:
+def shape_for_item(item: agent.NewsItem) -> dict[str, object]:
     searchable = f"{item.title} {item.summary} {item.source_excerpt}".lower()
-    for shape in KEYWORD_ANGLES:
+    for shape in KEYWORD_STORY_SHAPES:
         if any(keyword in searchable for keyword in shape["keywords"]):
             return shape
-    index = zlib.crc32(f"{item.url}|{item.title}".encode("utf-8")) % len(ANGLE_SHAPES)
-    return ANGLE_SHAPES[index]
+    index = zlib.crc32(f"{item.url}|{item.title}".encode("utf-8")) % len(STORY_SHAPES)
+    return STORY_SHAPES[index]
 
 
 def sentence_subject(item: agent.NewsItem) -> str:
@@ -250,14 +281,20 @@ def sentence_subject(item: agent.NewsItem) -> str:
     return f"{item.source_name}'s update"
 
 
+def format_sections(sections: list[tuple[str, str]]) -> str:
+    return "\n".join(f"{label}: {text}" for label, text in sections)
+
+
 def conservative_draft(item: agent.NewsItem) -> agent.Draft:
     shape = shape_for_item(item)
     title = compact_source_title(item.title)
-    source_sentence = f"According to {item.source_name}, {plain_news(item)}."
+    news = plain_news(item)
     body = (
-        f"{shape['hook'].format(title=sentence_subject(item))}\n\n"
-        f"{source_sentence} {shape['middle']}\n\n"
-        f"{shape['insight']}\n\n"
+        f"{str(shape['hook']).format(subject=sentence_subject(item))}\n\n"
+        f"{str(shape['setup']).format(news=news)}\n\n"
+        f"{shape['bridge']}\n"
+        f"{format_sections(shape['sections'])}\n\n"
+        f"{shape['wrap']}\n\n"
         f"{shape['closing']}\n\n"
         f"{agent.DEFAULT_HASHTAGS}"
     )
@@ -278,7 +315,7 @@ def is_factual_claim(claim: str) -> bool:
     lowered = stripped.lower()
     if not stripped or stripped.startswith("#"):
         return False
-    if any(marker in lowered for marker in ["my read", "my takeaway", "the real test", "the question i would ask"]):
+    if any(marker in lowered for marker in ["my read", "my takeaway", "the real test", "the question is"]):
         return False
     if re.search(r"\b(should|could|might|may|probably|often|rarely|usually|if|when|where|would|needs?|matters?)\b", lowered):
         if not re.search(r"\b\d+[\w%$]*\b", lowered):
@@ -293,19 +330,9 @@ def is_factual_claim(claim: str) -> bool:
     return False
 
 
-def has_natural_closing(text: str) -> bool:
+def has_reader_question(text: str) -> bool:
     without_hashtags = "\n".join(line for line in text.splitlines() if not line.strip().startswith("#")).strip()
-    ending = without_hashtags[-450:]
-    return "?" in ending or any(
-        phrase in ending.lower()
-        for phrase in [
-            "the real test",
-            "the strongest ai products",
-            "the best ai feature",
-            "trust becomes easier",
-            "earns its place",
-        ]
-    )
+    return "?" in without_hashtags[-700:]
 
 
 def has_template_header(text: str) -> bool:
@@ -316,26 +343,32 @@ def has_template_header(text: str) -> bool:
     return False
 
 
+def labeled_section_count(text: str) -> int:
+    pattern = r"(?m)^\s*(?:[\U0001F300-\U0001FAFF]\ufe0f?\s*)?[A-Z][A-Za-z0-9 /&+-]{2,38}:\s+\S+"
+    return len(re.findall(pattern, text))
+
+
 def validate_draft_quality(draft: agent.Draft) -> agent.Draft:
     body = draft.body.strip()
     title = draft.title.strip()
     combined = f"{title}\n{body}"
     word_count = len(re.findall(r"\b[\w']+\b", body))
     bullet_count = len(re.findall(r"(?m)^\s*[-*]\s+\S+", body))
+    section_count = labeled_section_count(body)
     question_count = combined.count("?")
 
-    if word_count < 110:
+    if word_count < 190:
         raise agent.AgentError(f"Draft quality gate failed: body is too short ({word_count} words).")
-    if word_count > 255:
+    if word_count > 460:
         raise agent.AgentError(f"Draft quality gate failed: body is too long ({word_count} words).")
-    if bullet_count > 0:
-        raise agent.AgentError("Draft quality gate failed: textbook-style bullet points are not allowed.")
+    if section_count < 3 and bullet_count < 3:
+        raise agent.AgentError("Draft quality gate failed: missing a useful breakdown with at least 3 concrete points.")
     if has_template_header(body):
         raise agent.AgentError("Draft quality gate failed: generic section header detected.")
-    if not has_natural_closing(body):
-        raise agent.AgentError("Draft quality gate failed: missing a natural closing thought or question.")
-    if question_count > 1:
-        raise agent.AgentError("Draft quality gate failed: too many questions for a natural closing.")
+    if not has_reader_question(body):
+        raise agent.AgentError("Draft quality gate failed: missing a reader question near the end.")
+    if question_count > 4:
+        raise agent.AgentError("Draft quality gate failed: too many questions.")
     if any(phrase.lower() in combined.lower() for phrase in FORBIDDEN_PHRASES):
         raise agent.AgentError("Draft quality gate failed: banned generic wording detected.")
     if any(re.search(pattern, combined, re.I) for pattern in MULTIPLE_CHOICE_ENDING_PATTERNS):
@@ -348,9 +381,21 @@ def build_gemini_prompt(item: agent.NewsItem, style: str, trend_context: str) ->
     summary = item.summary or "No usable RSS summary was provided."
     forbidden = ", ".join(f'"{phrase}"' for phrase in FORBIDDEN_PHRASES)
     return f"""
-You are writing one LinkedIn post like a sharp Product Manager who tracks AI closely.
+You are writing one LinkedIn post like a sharp Product Manager who tracks AI deeply.
 
-Write a clear, specific, human LinkedIn draft about the actual news. The reader should quickly understand what happened, why it matters, and what practical market or product marketing lesson to take away.
+The bar:
+Write like the post is meant for PMs, founders, AI builders, and tech operators who want to understand the practical lesson behind the news. It should be readable by a smart non-expert. It should not sound like a newsletter summary, press release, or generic ChatGPT output.
+
+The desired style:
+- Start with a strong tension-led hook.
+- Explain the verified news in plain English.
+- Turn the news into a practical breakdown with 3 to 4 concrete labeled points.
+- Use labels like "Data Quality:", "Escalation Logic:", "Review Loops:", "Buyer Confidence:", or other source-relevant labels.
+- Each labeled point must teach something specific and understandable.
+- Keep paragraphs short.
+- Be slightly opinionated, but do not invent facts.
+- End with one strong human question or takeaway before hashtags.
+- Use 8 to 12 relevant hashtags.
 
 Strict factual rules:
 - Use only the source metadata below for factual claims.
@@ -361,27 +406,23 @@ Strict factual rules:
 - Do not browse or rely on memory.
 
 Writing rules:
-- Keep the post around 120 to 220 words.
-- Use short natural paragraphs.
-- Do not use bullets unless the source itself is naturally a list, and avoid textbook-style lists.
-- Do not use hard-coded headers or labels such as "The News:", "The PM Lesson:", "Key Takeaways:", "What changed", "Why PMs should care", "Market signal", or "Builder takeaway".
-- Do not use these phrases: {forbidden}.
+- Length: 230 to 380 words.
 - Do not use em dashes.
-- Do not sound like ChatGPT, a press release, a launch note, or a generic AI newsletter.
-- Translate marketing language into what the update means for organizational efficiency, adoption curves, Product Marketing, the market, or end-user experience.
-- Start with a strong, simple hook that clearly explains why the news matters.
-- Mention the specific company, product, launch, funding, or update in plain English, only if supported by the source.
-- End with one practical takeaway or one thoughtful peer-style question. Do not end with a multiple-choice engagement question.
-- End with 8 to 12 relevant hashtags.
-
-Quality bar:
-- Every sentence must either explain the news, add source-grounded context, give a practical insight, or create useful curiosity.
-- Avoid abstract PM jargon.
-- Avoid generic hype.
-- Vary the structure so today's drafts do not all look the same.
+- Do not use these phrases: {forbidden}.
+- Avoid hard-coded generic headers like "The News:", "The PM Lesson:", "Key Takeaways:", "What changed", "Why PMs should care", "Market signal", or "Builder takeaway".
+- Do not use fake certainty. If the source is thin, keep the factual recap short and make the breakdown a clearly framed product/market lesson.
+- Do not end with a multiple-choice engagement question.
 - Sources stay outside the post body and will be appended by the Slack formatter.
 
-Style to vary today: {style}
+Useful angles to prefer:
+- Why teams actually adopt or ignore the product.
+- What the update changes for end users.
+- Where enterprise AI systems fail in practice.
+- What Product Marketing should make clear.
+- Which operational bottleneck the news exposes.
+- Why the market should care beyond the launch headline.
+
+Required post archetype: {style}
 
 Source metadata:
 Title: {item.title}
@@ -396,6 +437,12 @@ Article excerpt:
 
 Optional X trend context:
 {trend_context}
+
+Rules for X trend context:
+- Use X only to choose a reader-friendly angle, hook, question, or archetype.
+- Do not treat X posts as factual sources.
+- Do not copy claims, numbers, product status, quotes, customer names, or examples from X unless the source metadata also supports them.
+- If X conflicts with the source metadata, ignore X and trust the source metadata.
 
 Output valid JSON only with keys: title, body, fact_check_notes.
 """.strip()
